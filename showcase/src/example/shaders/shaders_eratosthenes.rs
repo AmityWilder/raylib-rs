@@ -53,8 +53,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                 "original/shaders/resources/shaders/glsl{}/eratosthenes.fs",
                 GLSL_VERSION
             )),
-        )
-        .unwrap();
+        );
 
     rl.set_target_fps(60); // Set our game to run at 60 frames-per-second
                            //--------------------------------------------------------------------------------------
@@ -70,24 +69,22 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
 
         // Draw
         //----------------------------------------------------------------------------------
-        let mut d = rl.begin_drawing(thread);
+        rl.draw(thread, |d| {
+            d.clear_background(Color::RAYWHITE);
+            d.draw_texture_mode(thread, &mut target, |d| { // Enable drawing to texture
+                d.clear_background(Color::BLACK);   // Clear the render texture
 
-        d.clear_background(Color::RAYWHITE);
-{
-        let mut d = d.begin_texture_mode(thread, &mut target); // Enable drawing to texture
-        d.clear_background(Color::BLACK);   // Clear the render texture
-
-        // Draw a rectangle in shader mode to be used as shader canvas
-        // NOTE: Rectangle uses font white character texture coordinates,
-        // so shader can not be applied here directly because input vertexTexCoord
-        // do not represent full screen coordinates (space where want to apply shader)
-        d.draw_rectangle(0, 0, d.get_screen_width(), d.get_screen_height(), Color::BLACK);
-}
-{
-        let mut d = d.begin_shader_mode(&shader);
-        // NOTE: Render texture must be y-flipped due to default OpenGL coordinates (left-bottom)
-        d.draw_texture_rec(target.texture(), rrect(0, 0, target.texture().width, -target.texture().height), rvec2(0.0, 0.0), Color::WHITE);
-}
+                // Draw a rectangle in shader mode to be used as shader canvas
+                // NOTE: Rectangle uses font white character texture coordinates,
+                // so shader can not be applied here directly because input vertexTexCoord
+                // do not represent full screen coordinates (space where want to apply shader)
+                d.draw_rectangle(0, 0, d.get_screen_width(), d.get_screen_height(), Color::BLACK);
+            });
+            d.draw_shader_mode(&shader, |d| {
+                // NOTE: Render texture must be y-flipped due to default OpenGL coordinates (left-bottom)
+                d.draw_texture_rec(target.texture(), rrect(0, 0, target.texture().width, -target.texture().height), rvec2(0.0, 0.0), Color::WHITE);
+            });
+        });
         //----------------------------------------------------------------------------------
     },
     );

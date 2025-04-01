@@ -71,7 +71,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
         )
         .unwrap()
     };
-    let mut texture = rl
+    let texture = rl
         .load_texture(thread, "original/shaders/resources/texel_checker.png")
         .unwrap();
 
@@ -98,8 +98,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                 "original/shaders/resources/shaders/glsl{}/fog.fs",
                 GLSL_VERSION
             )),
-        )
-        .unwrap();
+        );
     shader.locs_mut()[raylib::consts::ShaderLocationIndex::SHADER_LOC_MATRIX_MODEL as usize] =
         shader.get_shader_location("matModel");
     shader.locs_mut()[raylib::consts::ShaderLocationIndex::SHADER_LOC_VECTOR_VIEW as usize] =
@@ -127,8 +126,6 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
         &mut shader,
     );
 
-    rl.set_camera_mode(&camera, raylib::consts::CameraMode::CAMERA_ORBITAL); // Set an orbital camera mode
-
     rl.set_target_fps(60); // Set our game to run at 60 frames-per-second
                            //--------------------------------------------------------------------------------------
 
@@ -138,7 +135,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
     {
         // Update
         //----------------------------------------------------------------------------------
-        rl.update_camera(&mut camera); // Update camera
+        rl.update_camera(&mut camera, raylib::consts::CameraMode::CAMERA_ORBITAL); // Update camera
 
         if rl.is_key_down(raylib::consts::KeyboardKey::KEY_UP)
         {
@@ -162,30 +159,28 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
 
         // Update the light shader with the camera view position
         let loc = shader.locs_mut()[raylib::consts::ShaderLocationIndex::SHADER_LOC_VECTOR_VIEW as usize];
-        shader.set_shader_value( loc, camera.position);
+        shader.set_shader_value(loc, camera.position);
         //----------------------------------------------------------------------------------
 
         // Draw
         //----------------------------------------------------------------------------------
-        let mut d = rl.begin_drawing(thread);
+        rl.draw(thread, |d| {
+            d.clear_background(Color::GRAY);
+            d.draw_mode3D(&camera, |d| {
 
-        d.clear_background(Color::GRAY);
-{
-        let mut d = d.begin_mode3D(&camera);
+                // Draw the three models
+                d.draw_model(&modelA, Vector3::zero(), 1.0, Color::WHITE);
+                d.draw_model(&modelB, rvec3(-2.6, 0,  0), 1.0, Color::WHITE);
+                d.draw_model(&modelC, rvec3(2.6, 0,  0), 1.0, Color::WHITE);
 
-        // Draw the three models
-        d.draw_model(&modelA, Vector3::zero(), 1.0, Color::WHITE);
-        d.draw_model(&modelB, rvec3(-2.6, 0,  0), 1.0, Color::WHITE);
-        d.draw_model(&modelC, rvec3(2.6, 0,  0), 1.0, Color::WHITE);
+                for  i in (-20..20).step_by(2){
 
-        for  i in (-20..20).step_by(2){
+                    d.draw_model(&modelA, rvec3(i, 0,  2), 1.0, Color::WHITE);
+                }
+            });
 
-            d.draw_model(&modelA, rvec3(i, 0,  2), 1.0, Color::WHITE);
-        }
-
-    }
-
-        d.draw_text(&format!("Use KEY_UP/KEY_DOWN to change fog density [{:.2}]", fogDensity), 10, 10, 20, Color::RAYWHITE);
+            d.draw_text(&format!("Use KEY_UP/KEY_DOWN to change fog density [{:.2}]", fogDensity), 10, 10, 20, Color::RAYWHITE);
+        });
 
         //----------------------------------------------------------------------------------
     },
@@ -227,11 +222,11 @@ pub struct Light {
     pub position: Vector3,
     pub target: Vector3,
     pub color: Color,
-    pub enabled_loc: i32,
-    pub type_loc: i32,
-    pub pos_loc: i32,
-    pub target_loc: i32,
-    pub color_loc: i32,
+    pub enabled_loc: ShaderUniformLoc,
+    pub type_loc: ShaderUniformLoc,
+    pub pos_loc: ShaderUniformLoc,
+    pub target_loc: ShaderUniformLoc,
+    pub color_loc: ShaderUniformLoc,
 }
 
 static mut LIGHTS_COUNT: i32 = 0;

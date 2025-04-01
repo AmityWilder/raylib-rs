@@ -105,7 +105,6 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                 GLSL_VERSION
             )),
         )
-        .unwrap()
         .make_weak()
     };
 
@@ -158,8 +157,6 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
         ),
     ];
 
-    rl.set_camera_mode(&camera, raylib::consts::CameraMode::CAMERA_ORBITAL); // Set an orbital camera mode
-
     rl.set_target_fps(60); // Set our game to run at 60 frames-per-second
                            //--------------------------------------------------------------------------------------
 
@@ -188,7 +185,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
             lights[3].enabled = !lights[3].enabled;
         }
 
-        rl.update_camera(&mut camera); // Update camera
+        rl.update_camera(&mut camera, raylib::consts::CameraMode::CAMERA_ORBITAL); // Update camera
 
         // Make the lights do differing orbits
         angle -= 0.02;
@@ -218,41 +215,41 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
 
         // Draw
         //----------------------------------------------------------------------------------
-        let mut d = rl.begin_drawing(thread);
+        rl.draw(thread, |d| {
+            d.clear_background(Color::RAYWHITE);
 
-        d.clear_background(Color::RAYWHITE);
-{
-        let mut d = d.begin_mode3D(&camera);
+            d.draw_mode3D(&camera, |d| {
 
-        // Draw the three models
-        d.draw_model(&modelA, Vector3::zero(), 1.0, Color::WHITE);
-        d.draw_model(&modelB, rvec3(-1.6, 0,  0), 1.0, Color::WHITE);
-        d.draw_model(&modelC, rvec3(1.6, 0,  0), 1.0, Color::WHITE);
+                // Draw the three models
+                d.draw_model(&modelA, Vector3::zero(), 1.0, Color::WHITE);
+                d.draw_model(&modelB, rvec3(-1.6, 0,  0), 1.0, Color::WHITE);
+                d.draw_model(&modelC, rvec3(1.6, 0,  0), 1.0, Color::WHITE);
 
-        // Draw markers to show where the lights are
-        if lights[0].enabled
-        {
-            d.draw_sphere_ex(lights[0].position, 0.2, 8, 8, Color::WHITE);
-        }
-        if lights[1].enabled
-        {
-            d.draw_sphere_ex(lights[1].position, 0.2, 8, 8,Color::RED);
-        }
-        if lights[2].enabled
-        {
-            d.draw_sphere_ex(lights[2].position, 0.2, 8, 8, Color::GREEN);
-        }
-        if lights[3].enabled
-        {
-            d.draw_sphere_ex(lights[3].position, 0.2, 8, 8, Color::BLUE);
-        }
+                // Draw markers to show where the lights are
+                if lights[0].enabled
+                {
+                    d.draw_sphere_ex(lights[0].position, 0.2, 8, 8, Color::WHITE);
+                }
+                if lights[1].enabled
+                {
+                    d.draw_sphere_ex(lights[1].position, 0.2, 8, 8,Color::RED);
+                }
+                if lights[2].enabled
+                {
+                    d.draw_sphere_ex(lights[2].position, 0.2, 8, 8, Color::GREEN);
+                }
+                if lights[3].enabled
+                {
+                    d.draw_sphere_ex(lights[3].position, 0.2, 8, 8, Color::BLUE);
+                }
 
-        d.draw_grid(10, 1.0);
-}
+                d.draw_grid(10, 1.0);
+            });
 
-        d.draw_fps(10, 10);
+            d.draw_fps(10, 10);
 
-        d.draw_text("Use keys RGBW to toggle lights", 10, 30, 20, Color::DARKGRAY);
+            d.draw_text("Use keys RGBW to toggle lights", 10, 30, 20, Color::DARKGRAY);
+        });
 
         //----------------------------------------------------------------------------------
     },
@@ -295,11 +292,11 @@ pub struct Light {
     pub position: Vector3,
     pub target: Vector3,
     pub color: Color,
-    pub enabled_loc: i32,
-    pub type_loc: i32,
-    pub pos_loc: i32,
-    pub target_loc: i32,
-    pub color_loc: i32,
+    pub enabled_loc: ShaderUniformLoc,
+    pub type_loc: ShaderUniformLoc,
+    pub pos_loc: ShaderUniformLoc,
+    pub target_loc: ShaderUniformLoc,
+    pub color_loc: ShaderUniformLoc,
 }
 
 static mut LIGHTS_COUNT: i32 = 0;

@@ -3,7 +3,7 @@
 use crate::core::texture::Image;
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
-use std::ffi::CString;
+use std::{ffi::CString, ptr::NonNull};
 use std::ops::{Deref, DerefMut, Range};
 use std::usize;
 
@@ -16,13 +16,13 @@ impl Deref for RandomSequence {
     type Target = [i32];
 
     fn deref(&self) -> &Self::Target {
-        std::slice::from_raw_parts(self.0.as_ptr(), self.1 as usize)
+        unsafe { std::slice::from_raw_parts(self.0.as_ptr(), self.1 as usize) }
     }
 }
 
 impl DerefMut for RandomSequence {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        std::slice::from_raw_parts_mut(self.0.as_ptr(), self.1 as usize)
+        unsafe { std::slice::from_raw_parts_mut(self.0.as_ptr(), self.1 as usize) }
     }
 }
 
@@ -107,7 +107,7 @@ impl RaylibHandle {
     /// ```
     pub fn get_random_value(&self, num: Range<i32>) -> i32 {
         unsafe {
-            (ffi::GetRandomValue(num.start, num.end.into()) as i32)
+            ffi::GetRandomValue(num.start, num.end.into()) as i32
         }
     }
 
@@ -118,3 +118,20 @@ impl RaylibHandle {
         }
     }
 }
+
+// lossy conversion to an f32
+pub trait AsF32: Copy {
+    fn as_f32(self) -> f32;
+}
+
+macro_rules! as_f32 {
+    ($($T:ty),+ $(,)?) => {
+        $(impl AsF32 for $T {
+            fn as_f32(self) -> f32 {
+                self as f32
+            }
+        })+
+    };
+}
+
+as_f32!(u8, u16, u32, i8, i16, i32, f32);

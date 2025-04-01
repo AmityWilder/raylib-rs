@@ -1,7 +1,7 @@
 //! Data manipulation functions. Compress and Decompress with DEFLATE
 use std::{
     ffi::{c_char, CString},
-    path::Path,
+    path::Path, ptr::NonNull,
 };
 
 use crate::{
@@ -28,7 +28,13 @@ pub struct DataBuf {
 impl std::ops::Deref for DataBuf {
     type Target = [u8];
     fn deref(&self) -> &Self::Target {
-        std::slice::from_raw_parts(self.buffer.as_ptr(), self.len.get() as usize)
+        unsafe { std::slice::from_raw_parts(self.buffer.as_ptr(), self.len as usize) }
+    }
+}
+
+impl std::ops::DerefMut for DataBuf {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { std::slice::from_raw_parts_mut(self.buffer.as_ptr(), self.len as usize) }
     }
 }
 
@@ -48,10 +54,10 @@ pub fn compress_data(data: &[u8]) -> Result<DataBuf, CompressionFailError> {
         ffi::CompressData(data.as_ptr() as *mut _, data_len as i32, &mut out_length)
     };
 
-    if let buffer = NonNull::new(buffer) {
+    if let Some(buffer) = NonNull::new(buffer) {
         assert!(out_length >= 1, "non-null buffer length cannot be zero or negative");
         Ok(DataBuf {
-            buffer: NonNull::new(buffer),
+            buffer,
             len: out_length as u32,
         })
     } else {
@@ -85,7 +91,7 @@ pub fn decompress_data(data: &[u8]) -> Result<DataBuf, CompressionFailError> {
             len: out_length as u32,
         })
     } else {
-        Err(CompressionFailError(()));
+        Err(CompressionFailError(()))
     }
 }
 

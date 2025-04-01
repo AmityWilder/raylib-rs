@@ -109,10 +109,10 @@ impl Color {
     /// Returns hexadecimal value for a Color
     #[inline]
     pub fn to_int(&self) -> i32 {
-        ((self.r as u32 << 24) |
-         (self.g as u32 << 16) |
-         (self.b as u32 <<  8) |
-          self.a as u32) as i32
+        (((self.r as u32) << 24) |
+         ((self.g as u32) << 16) |
+         ((self.b as u32) <<  8) |
+          (self.a as u32)) as i32
     }
 
     /// Returns color normalized as float [0..1]
@@ -169,10 +169,10 @@ impl Color {
     /// Get color multiplied with another color
     pub fn tint(&self, color: Self) -> Self {
         Self {
-            r: ((self.r as i32*tint.r as i32)/255) as u8,
-            g: ((self.g as i32*tint.g as i32)/255) as u8,
-            b: ((self.b as i32*tint.b as i32)/255) as u8,
-            a: ((self.a as i32*tint.a as i32)/255) as u8,
+            r: ((self.r as i32*color.r as i32)/255) as u8,
+            g: ((self.g as i32*color.g as i32)/255) as u8,
+            b: ((self.b as i32*color.b as i32)/255) as u8,
+            a: ((self.a as i32*color.a as i32)/255) as u8,
         }
     }
     /// Get color with brightness correction, brightness factor goes from -1.0f to 1.0f

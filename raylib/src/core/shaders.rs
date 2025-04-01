@@ -195,11 +195,11 @@ impl Shader {
 
     /// Sets shader uniform value
     #[inline]
-    pub fn set_shader_value<S: ShaderV>(&mut self, uniform_loc: i32, value: S) {
+    pub fn set_shader_value<S: ShaderV>(&mut self, uniform_loc: ShaderUniformLoc, value: S) {
         unsafe {
             ffi::SetShaderValue(
                 self.0,
-                uniform_loc,
+                uniform_loc.0,
                 value.value(),
                 (S::UNIFORM_TYPE as u32) as i32,
             );
@@ -208,11 +208,11 @@ impl Shader {
 
     /// Set shader uniform value vector
     #[inline]
-    pub fn set_shader_value_v<S: ShaderV>(&mut self, uniform_loc: i32, value: &[S]) {
+    pub fn set_shader_value_v<S: ShaderV>(&mut self, uniform_loc: ShaderUniformLoc, value: &[S]) {
         unsafe {
             ffi::SetShaderValueV(
                 self.0,
-                uniform_loc,
+                uniform_loc.0,
                 value.as_ptr() as *const ::std::os::raw::c_void,
                 (S::UNIFORM_TYPE as u32) as i32,
                 value.len() as i32,
@@ -222,9 +222,9 @@ impl Shader {
 
     /// Sets shader uniform value (matrix 4x4).
     #[inline]
-    pub fn set_shader_value_matrix(&mut self, uniform_loc: i32, mat: Matrix) {
+    pub fn set_shader_value_matrix(&mut self, uniform_loc: ShaderUniformLoc, mat: Matrix) {
         unsafe {
-            ffi::SetShaderValueMatrix(self.0, uniform_loc, mat.into());
+            ffi::SetShaderValueMatrix(self.0, uniform_loc.0, mat.into());
         }
     }
 
@@ -244,7 +244,7 @@ impl Shader {
 impl RaylibShader for WeakShader {}
 impl RaylibShader for Shader {}
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShaderUniformLoc(i32);
 
 impl ShaderUniformLoc {
@@ -254,7 +254,7 @@ impl ShaderUniformLoc {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShaderAttribLoc(i32);
 
 impl ShaderAttribLoc {
@@ -266,13 +266,13 @@ impl ShaderAttribLoc {
 
 pub trait RaylibShader: AsRef<ffi::Shader> + AsMut<ffi::Shader> {
     #[inline]
-    fn locs(&self) -> &[i32] {
-        unsafe { std::slice::from_raw_parts(self.as_ref().locs, 32) }
+    fn locs(&self) -> &[ShaderUniformLoc] {
+        unsafe { std::slice::from_raw_parts(self.as_ref().locs as *const ShaderUniformLoc, 32) }
     }
 
     #[inline]
-    fn locs_mut(&mut self) -> &mut [i32] {
-        unsafe { std::slice::from_raw_parts_mut(self.as_mut().locs, 32) }
+    fn locs_mut(&mut self) -> &mut [ShaderUniformLoc] {
+        unsafe { std::slice::from_raw_parts_mut(self.as_mut().locs as *mut ShaderUniformLoc, 32) }
     }
 
     /// Gets shader uniform location by name.

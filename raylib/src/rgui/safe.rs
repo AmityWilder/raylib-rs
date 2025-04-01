@@ -475,7 +475,7 @@ pub trait RaylibDrawGui {
         subdivs: i32,
     ) -> (bool, Vector2) {
         let c_text = CString::new(text).unwrap();
-        let mut mouseCell = ffi::Vector2 { x: 0.0, y: 0.0 };
+        let mut mouse_cell = ffi::Vector2 { x: 0.0, y: 0.0 };
         (
             unsafe {
                 ffi::GuiGrid(
@@ -483,10 +483,10 @@ pub trait RaylibDrawGui {
                     c_text.as_ptr(),
                     spacing,
                     subdivs,
-                    &mut mouseCell,
+                    &mut mouse_cell,
                 ) > 0
             },
-            mouseCell.into(),
+            mouse_cell.into(),
         )
     }
     /// List View control, returns selected list item index

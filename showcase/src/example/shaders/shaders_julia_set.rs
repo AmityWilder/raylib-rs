@@ -52,8 +52,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                 "original/shaders/resources/shaders/glsl{}/julia_set.fs",
                 GLSL_VERSION
             )),
-        )
-        .unwrap();
+        );
 
     // c constant to use in z^2 + c
     let mut c = POINTS_OF_INTEREST[0];
@@ -169,33 +168,32 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
 
         // Draw
         //----------------------------------------------------------------------------------
-        let mut d = rl.begin_drawing(thread);
+        rl.draw(thread, |d| {
+            d.clear_background(Color::BLACK); // Clear the screen of the previous frame.
 
-        d.clear_background(Color::BLACK); // Clear the screen of the previous frame.
+            d.draw_texture_mode(thread, &mut target, |d| { // Enable drawing to texture
+                // Using a render texture to draw Julia set
+                d.clear_background(Color::BLACK);   // Clear the render texture
 
-        {// Using a render texture to draw Julia set
-        let mut d = d.begin_texture_mode(thread, &mut target); // Enable drawing to texture
-        d.clear_background(Color::BLACK);   // Clear the render texture
-
-        // Draw a rectangle in shader mode to be used as shader canvas
-        // NOTE: Rectangle uses font white character texture coordinates,
-        // so shader can not be applied here directly because input vertexTexCoord
-        // do not represent full screen coordinates (space where want to apply shader)
-        d.draw_rectangle(0, 0, d.get_screen_width(), d.get_screen_height(), Color::BLACK);
-}
-       { // Draw the saved texture and rendered julia set with shader
-        // NOTE: We do not invert texture on Y, already considered inside shader
-        let mut d = d.begin_shader_mode(&shader);
-        d.draw_texture(target.texture(), 0, 0, Color::WHITE);
-}
-        if showControls
-        {
-            d.draw_text("Press Mouse buttons right/left to zoom in/out and move", 10, 15, 10, Color::RAYWHITE);
-            d.draw_text("Press KEY_F1 to toggle these controls", 10, 30, 10, Color::RAYWHITE);
-            d.draw_text("Press KEYS [1 - 6] to change point of interest", 10, 45, 10, Color::RAYWHITE);
-            d.draw_text("Press KEY_LEFT | KEY_RIGHT to change speed", 10, 60, 10, Color::RAYWHITE);
-            d.draw_text("Press KEY_SPACE to pause movement animation", 10, 75, 10, Color::RAYWHITE);
-        }
+                // Draw a rectangle in shader mode to be used as shader canvas
+                // NOTE: Rectangle uses font white character texture coordinates,
+                // so shader can not be applied here directly because input vertexTexCoord
+                // do not represent full screen coordinates (space where want to apply shader)
+                d.draw_rectangle(0, 0, d.get_screen_width(), d.get_screen_height(), Color::BLACK);
+            });
+            d.draw_shader_mode(&shader, |d| { // Draw the saved texture and rendered julia set with shader
+                                              // NOTE: We do not invert texture on Y, already considered inside shader
+                d.draw_texture(target.texture(), 0, 0, Color::WHITE);
+            });
+            if showControls
+            {
+                d.draw_text("Press Mouse buttons right/left to zoom in/out and move", 10, 15, 10, Color::RAYWHITE);
+                d.draw_text("Press KEY_F1 to toggle these controls", 10, 30, 10, Color::RAYWHITE);
+                d.draw_text("Press KEYS [1 - 6] to change point of interest", 10, 45, 10, Color::RAYWHITE);
+                d.draw_text("Press KEY_LEFT | KEY_RIGHT to change speed", 10, 60, 10, Color::RAYWHITE);
+                d.draw_text("Press KEY_SPACE to pause movement animation", 10, 75, 10, Color::RAYWHITE);
+            }
+        });
 
         //----------------------------------------------------------------------------------
     },

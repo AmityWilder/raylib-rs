@@ -113,8 +113,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/grayscale.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_POSTERIZATION as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -124,8 +123,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/posterization.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_DREAM_VISION as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -135,8 +133,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/dream_vision.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_PIXELIZER as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -146,8 +143,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/pixelizer.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_CROSS_HATCHING as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -157,8 +153,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/cross_hatching.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_CROSS_STITCHING as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -168,8 +163,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/cross_stitching.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_PREDATOR_VIEW as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -179,8 +173,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/predator.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_SCANLINES as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -190,8 +183,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/scanlines.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_FISHEYE as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -201,8 +193,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/fisheye.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_SOBEL as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -212,8 +203,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/sobel.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         shaders[FX_BLOOM as usize] = MaybeUninit::new(
             rl.load_shader(
@@ -223,8 +213,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/bloom.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
         // "original/shaders/resources/shaders/glsl330/blur.fs";
         shaders[FX_BLUR as usize] = MaybeUninit::new(
@@ -235,8 +224,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     "original/shaders/resources/shaders/glsl{}/blur.fs",
                     GLSL_VERSION
                 )),
-            )
-            .unwrap(),
+            ),
         );
 
         unsafe { std::mem::transmute::<_, [Shader; MAX_POSTPRO_SHADERS]>(shaders) }
@@ -249,9 +237,6 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
         .load_render_texture(thread, screen_width as u32, screen_height as u32)
         .unwrap();
 
-    // Setup orbital camera
-    rl.set_camera_mode(camera, raylib::consts::CameraMode::CAMERA_ORBITAL); // Set an orbital camera mode
-
     rl.set_target_fps(60); // Set our game to run at 60 frames-per-second
                            //--------------------------------------------------------------------------------------
 
@@ -259,7 +244,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
     return Box::new(move |rl: &mut RaylibHandle, thread: &RaylibThread| -> () {
         // Update
         //----------------------------------------------------------------------------------
-        rl.update_camera(&mut camera); // Update camera
+        rl.update_camera(&mut camera, raylib::consts::CameraMode::CAMERA_ORBITAL); // Update camera
 
         if rl.is_key_pressed(raylib::consts::KeyboardKey::KEY_RIGHT) {
             current_shader += 1;
@@ -276,27 +261,22 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
 
         // Draw
         //----------------------------------------------------------------------------------
-        {
-            let mut d = rl.begin_drawing(thread);
+        rl.draw(thread, |d| {
 
             d.clear_background(Color::RAYWHITE);
-            {
-                let mut d = d.begin_texture_mode(thread, &mut target); // Enable drawing to texture
+            d.draw_texture_mode(thread, &mut target, |d| { // Enable drawing to texture
 
                 d.clear_background(Color::RAYWHITE); // Clear texture background
-                {
-                    let mut d = d.begin_mode3D(&camera); // Begin 3d mode drawing
+                d.draw_mode3D(&camera, |d| { // Begin 3d mode drawing
 
                     d.draw_model(&model, position, 0.1, Color::WHITE); // Draw 3d model with texture
 
                     d.draw_grid(10, 1.0); // Draw a grid
-                }
-            }
+                });
+            });
 
-            {
-                // Render previously generated texture using selected postpro shader
-                let mut d = d.begin_shader_mode(&shaders[current_shader as usize]);
-
+            // Render previously generated texture using selected postpro shader
+            d.draw_shader_mode(&shaders[current_shader as usize], |d| {
                 // NOTE: Render texture must be y-flipped due to default OpenGL coordinates (left-bottom)
                 d.draw_texture_rec(
                     target.texture(),
@@ -304,10 +284,10 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                     rvec2(0, 0),
                     Color::WHITE,
                 );
-            }
+            });
 
             // Draw 2d shapes and text over drawn texture
-            d.draw_rectangle(0, 9, 580, 30, Color::LIGHTGRAY.fade(0.7));
+            d.draw_rectangle(0, 9, 580, 30, Color::LIGHTGRAY.alpha(0.7));
 
             d.draw_text(
                 "(c) Church 3D model by Alberto Cano",
@@ -330,7 +310,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
             d.draw_fps(700, 15);
 
             //----------------------------------------------------------------------------------
-        }
+        });
 
         if rl.is_key_pressed(crate::EXIT_KEY) {
             unsafe {

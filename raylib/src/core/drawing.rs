@@ -13,7 +13,7 @@ use crate::ffi;
 use crate::math::Matrix;
 use crate::models::{Mesh, WeakMaterial};
 use crate::text::Codepoints;
-use std::convert::AsRef;
+use std::{convert::AsRef, marker::PhantomData};
 use std::ffi::CString;
 
 use super::camera::Camera2D;
@@ -232,7 +232,7 @@ impl<T> RaylibDraw3D for RaylibMode3D<'_, T> {}
 
 // shader Mode
 
-pub struct RaylibShaderMode<'a, 'b, T>(&'a mut T, &'b mut Shader);
+pub struct RaylibShaderMode<'a, 'b, T>(&'a mut T, &'b Shader, PhantomData<&'b mut Shader>);
 
 impl<T> Drop for RaylibShaderMode<'_, '_, T> {
     fn drop(&mut self) {
@@ -261,11 +261,11 @@ where
     /// Begin custom shader drawing.
     fn draw_shader_mode<'a, 'b>(
         &'a mut self,
-        shader: &'b mut Shader,
+        shader: &'b Shader,
         func: impl FnOnce(&mut RaylibShaderMode<'a, 'b, Self>),
     ) {
         unsafe { ffi::BeginShaderMode(*shader.as_ref()) }
-        func(&mut RaylibShaderMode(self, shader));
+        func(&mut RaylibShaderMode(self, shader, PhantomData));
     }
 }
 

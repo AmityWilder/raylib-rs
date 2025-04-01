@@ -65,8 +65,7 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
                 "original/shaders/resources/shaders/glsl{}/swirl.fs",
                 GLSL_VERSION
             )),
-        )
-        .unwrap();
+        );
 
     // Get variable (uniform) location on the shader to connect with the program
     // NOTE: If uniform variable could not be found in the shader, function returns -1
@@ -78,9 +77,6 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
     let mut target = rl
         .load_render_texture(thread, screen_width as u32, screen_height as u32)
         .unwrap();
-
-    // Setup orbital camera
-    rl.set_camera_mode(&camera, raylib::consts::CameraMode::CAMERA_ORBITAL); // Set an orbital camera mode
 
     rl.set_target_fps(60); // Set our game to run at 60 frames-per-second
                            //--------------------------------------------------------------------------------------
@@ -100,41 +96,36 @@ pub fn run(rl: &mut RaylibHandle, thread: &RaylibThread) -> crate::SampleOut {
         // Send new value to the shader to be used on drawing
         shader.set_shader_value( swirlCenterLoc, swirlCenter);
 
-        rl.update_camera(&mut camera); // Update camera
+        rl.update_camera(&mut camera, raylib::consts::CameraMode::CAMERA_ORBITAL); // Update camera
         //----------------------------------------------------------------------------------
-{
         // Draw
         //----------------------------------------------------------------------------------
-        let mut d = rl.begin_drawing(thread);
+        rl.draw(thread, |d| {
+            d.clear_background(Color::RAYWHITE);
+            d.draw_texture_mode(thread, &mut target, |d| { // Enable drawing to texture
 
-        d.clear_background(Color::RAYWHITE);
-{
-        let mut d = d.begin_texture_mode(thread, &mut target); // Enable drawing to texture
+                d.clear_background(Color::RAYWHITE); // Clear texture background
+                d.draw_mode3D(&camera, |d| { // Begin 3d mode drawing
 
-        d.clear_background(Color::RAYWHITE); // Clear texture background
-{
-        let mut d = d.begin_mode3D(&camera); // Begin 3d mode drawing
+                    d.draw_model(&model, position, 0.5, Color::WHITE); // Draw 3d model with texture
 
-        d.draw_model(&model, position, 0.5, Color::WHITE); // Draw 3d model with texture
+                    d.draw_grid(10, 1.0); // Draw a grid
+                });
 
-        d.draw_grid(10, 1.0); // Draw a grid
-}
+                d.draw_text("TEXT DRAWN IN RENDER TEXTURE", 200, 10, 30,Color::RED);
 
-        d.draw_text("TEXT DRAWN IN RENDER TEXTURE", 200, 10, 30,Color::RED);
+            });
+            d.draw_shader_mode(&shader, |d| {
 
-}
-{
-        let mut d = d.begin_shader_mode(&shader);
+                    // NOTE: Render texture must be y-flipped due to default OpenGL coordinates (left-bottom)
+                d.draw_texture_rec(target.texture(), rrect(0, 0, target.texture().width, -target.texture().height), rvec2(0,  0), Color::WHITE);
 
-        // NOTE: Render texture must be y-flipped due to default OpenGL coordinates (left-bottom)
-        d.draw_texture_rec(target.texture(), rrect(0, 0, target.texture().width, -target.texture().height), rvec2(0,  0), Color::WHITE);
+            });
+            // Draw some 2d text over drawn texture
+            d.draw_text("(c) Barracks 3D model by Alberto Cano", screen_width - 220, screen_height - 20, 10, Color::GRAY);
 
-}
-        // Draw some 2d text over drawn texture
-        d.draw_text("(c) Barracks 3D model by Alberto Cano", screen_width - 220, screen_height - 20, 10, Color::GRAY);
-
-        d.draw_fps(10, 10);
-    }
+            d.draw_fps(10, 10);
+        });
         //----------------------------------------------------------------------------------
     },
     );

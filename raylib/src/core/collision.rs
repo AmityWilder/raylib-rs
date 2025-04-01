@@ -1,5 +1,5 @@
 //! Common collision handling code
-use crate::core::math::{BoundingBox, Ray, Rectangle, Vector2};
+use crate::{core::math::{BoundingBox, Ray, Rectangle, Vector2}, prelude::Vector3};
 
 use crate::ffi;
 use crate::math::{Matrix, RayCollision};
@@ -84,7 +84,7 @@ impl Vector2 {
         radius: f32,
     ) -> bool {
         unsafe {
-            ffi::CheckCollisionPointCircle(point.into(), center.into(), radius)
+            ffi::CheckCollisionPointCircle(self.into(), center.into(), radius)
         }
     }
 
@@ -94,7 +94,7 @@ impl Vector2 {
         assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
             ffi::CheckCollisionPointPoly(
-                point.into(),
+                self.into(),
                 std::mem::transmute(points.as_ptr()),
                 point_count as i32,
             )
@@ -109,7 +109,7 @@ impl Vector2 {
         threshold: i32,
     ) -> bool {
         unsafe {
-            ffi::CheckCollisionPointLine(point.into(), p1.into(), p2.into(), threshold)
+            ffi::CheckCollisionPointLine(self.into(), p1.into(), p2.into(), threshold)
         }
     }
 
@@ -122,7 +122,7 @@ impl Vector2 {
         p3: Vector2,
     ) -> bool {
         unsafe {
-            ffi::CheckCollisionPointTriangle(point.into(), p1.into(), p2.into(), p3.into())
+            ffi::CheckCollisionPointTriangle(self.into(), p1.into(), p2.into(), p3.into())
         }
     }
 }

@@ -89,12 +89,12 @@ impl RaylibHandle {
 
     /// Returns gamepad internal name id.
     #[inline]
-    pub fn get_gamepad_name(&self, gamepad: i32) -> Result<Option<String>, NulError> {
+    pub fn get_gamepad_name(&self, gamepad: i32) -> Result<Option<String>, std::str::Utf8Error> {
         let name = unsafe { ffi::GetGamepadName(gamepad) };
         if !name.is_null() {
-            return Some(unsafe { CStr::from_ptr(name).to_str()?.to_owned() });
+            return Ok(Some(unsafe { CStr::from_ptr(name).to_str()?.to_owned() }));
         }
-        None
+        Ok(None)
     }
 
     /// Detect if a gamepad button has been pressed once.
