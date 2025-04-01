@@ -227,8 +227,8 @@ where
 }
 
 impl<D: RaylibDraw> RaylibMode3DExt for D {}
-impl<'a, T> RaylibDraw for RaylibMode3D<'a, T> {}
-impl<'a, T> RaylibDraw3D for RaylibMode3D<'a, T> {}
+impl<T> RaylibDraw for RaylibMode3D<'_, T> {}
+impl<T> RaylibDraw3D for RaylibMode3D<'_, T> {}
 
 // shader Mode
 
