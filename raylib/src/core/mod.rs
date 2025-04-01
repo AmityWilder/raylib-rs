@@ -92,11 +92,11 @@ pub struct RaylibBuilder {
 }
 
 /// Creates a `RaylibBuilder` for choosing window options before initialization.
-pub fn init() -> RaylibBuilder {
+pub fn init(width: i32, height: i32, title: &str) -> RaylibBuilder {
     RaylibBuilder {
-        width: 640,
-        height: 480,
-        title: "raylib-rs".to_string(),
+        width,
+        height,
+        title: title.to_string(),
         ..Default::default()
     }
 }
@@ -143,31 +143,6 @@ impl RaylibBuilder {
         self
     }
 
-    /// Sets the window's width.
-    pub fn width(&mut self, w: i32) -> &mut Self {
-        self.width = w;
-        self
-    }
-
-    /// Sets the window's height.
-    pub fn height(&mut self, h: i32) -> &mut Self {
-        self.height = h;
-        self
-    }
-
-    /// Sets the window's width and height.
-    pub fn size(&mut self, w: i32, h: i32) -> &mut Self {
-        self.width = w;
-        self.height = h;
-        self
-    }
-
-    /// Sets the window title.
-    pub fn title(&mut self, text: &str) -> &mut Self {
-        self.title = text.to_string();
-        self
-    }
-
     #[cfg(feature = "imgui")]
     /// Set the theme to be used for imgui.
     pub fn imgui_theme(&mut self, theme: crate::imgui::ImGuiTheme) -> &mut Self {
@@ -180,7 +155,7 @@ impl RaylibBuilder {
     /// # Panics
     ///
     /// Attempting to initialize Raylib more than once will result in a panic.
-    pub fn build(&self) -> (RaylibHandle, RaylibThread) {
+    pub fn build(&self) -> Result<(RaylibHandle, RaylibThread), InitWindowError> {
         use crate::consts::ConfigFlags::*;
         let mut flags = 0u32;
         if self.fullscreen_mode {
@@ -210,34 +185,51 @@ impl RaylibBuilder {
             ffi::SetTraceLogLevel(self.log_level as i32);
         }
 
-        let rl = init_window(self.width, self.height, &self.title);
+        let rl = init_window(self.width, self.height, &self.title)?;
 
         #[cfg(feature = "imgui")]
         unsafe {
             crate::imgui::init_imgui_context(self.imgui_theme == crate::imgui::ImGuiTheme::Dark);
         }
 
-        (rl, RaylibThread(PhantomData))
+        Ok((rl, RaylibThread(PhantomData)))
     }
 }
+
+#[derive(Debug)]
+pub enum InitWindowError {
+    DoubleInit,
+    CreateFailed,
+}
+
+impl std::fmt::Display for InitWindowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InitWindowError::DoubleInit => write!(f, "Attempted to initialize raylib-rs more than once!"),
+            InitWindowError::CreateFailed => write!(f, "Attempting to create window failed!"),
+        }
+    }
+}
+
+impl std::error::Error for InitWindowError {}
 
 /// Initializes window and OpenGL context.
 ///
 /// # Panics
 ///
 /// Attempting to initialize Raylib more than once will result in a panic.
-fn init_window(width: i32, height: i32, title: &str) -> RaylibHandle {
+fn init_window(width: i32, height: i32, title: &str) -> Result<RaylibHandle, InitWindowError> {
     if unsafe { ffi::IsWindowReady() } {
-        panic!("Attempted to initialize raylib-rs more than once!");
+        Err(InitWindowError::DoubleInit)
     } else {
         unsafe {
             let c_title = CString::new(title).unwrap();
             ffi::InitWindow(width, height, c_title.as_ptr());
         }
         if !unsafe { ffi::IsWindowReady() } {
-            panic!("Attempting to create window failed!");
+            return Err(InitWindowError::CreateFailed);
         }
 
-        RaylibHandle(())
+        Ok(RaylibHandle(()))
     }
 }

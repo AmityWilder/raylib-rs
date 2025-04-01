@@ -6,7 +6,7 @@ use crate::core::camera::Camera3D;
 use crate::core::math::Ray;
 use crate::core::math::{Vector2, Vector3};
 
-use crate::core::texture::Texture2D;
+use crate::core::texture::{Texture2D, RenderTexture2D};
 use crate::core::vr::VrStereoConfig;
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
@@ -21,130 +21,99 @@ use super::shaders::{Shader, ShaderV};
 
 /// Seems like all draw commands must be issued from the main thread
 impl RaylibHandle {
-    #[must_use]
     /// Setup canvas (framebuffer) to start drawing.
-    /// Prefer using the closure version, [RaylibHandle::draw]. This version returns a handle that calls [raylib_sys::EndDrawing] at the end of the scope and is provided as a fallback incase you run into issues with closures(such as lifetime or performance reasons)
-    pub fn begin_drawing(&mut self, _: &RaylibThread) -> RaylibDrawHandle {
+    pub fn draw(
+        &mut self,
+        _: &RaylibThread,
+        func: impl FnOnce(&mut RaylibDrawHandle<'_>),
+    ) {
         unsafe {
             ffi::BeginDrawing();
-        };
-
-        let d = RaylibDrawHandle(self);
-        d
-    }
-    pub fn draw(&mut self, _: &RaylibThread, mut func: impl FnMut(RaylibDrawHandle)) {
-        unsafe {
-            ffi::BeginDrawing();
-        };
-        func(RaylibDrawHandle(self));
-        unsafe {
-            ffi::EndDrawing();
-        };
+        }
+        func(&mut RaylibDrawHandle(self));
     }
 }
 
 pub struct RaylibDrawHandle<'a>(&'a mut RaylibHandle);
-
-impl<'a> RaylibDrawHandle<'a> {
-    #[deprecated = "Calling begin_drawing within RaylibDrawHandle will result in a runtime error."]
-    #[doc(hidden)]
-    pub fn begin_drawing(&mut self, _: &RaylibThread) -> RaylibDrawHandle {
-        panic!("Nested begin_drawing call")
-    }
-    #[deprecated = "Calling draw within RaylibDrawHandle will result in a runtime error."]
-    #[doc(hidden)]
-    pub fn draw(&mut self, _: &RaylibThread, mut _func: impl FnMut(RaylibDrawHandle)) {
-        panic!("Nested draw call")
-    }
-}
-
-impl<'a> Drop for RaylibDrawHandle<'a> {
+impl Drop for RaylibDrawHandle<'_> {
     fn drop(&mut self) {
         unsafe {
             ffi::EndDrawing();
         }
     }
 }
-
-impl<'a> std::ops::Deref for RaylibDrawHandle<'a> {
+impl std::ops::Deref for RaylibDrawHandle<'_> {
     type Target = RaylibHandle;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-
-impl<'a> std::ops::DerefMut for RaylibDrawHandle<'a> {
+impl std::ops::DerefMut for RaylibDrawHandle<'_> {
     fn deref_mut(&mut self) -> &mut RaylibHandle {
         self.0
     }
 }
-impl<'a> RaylibDraw for RaylibDrawHandle<'a> {}
+impl RaylibDraw for RaylibDrawHandle<'_> {}
 
 // Texture2D Stuff
 
-pub struct RaylibTextureMode<'a, T>(&'a mut T, &'a mut ffi::RenderTexture2D);
+pub struct RaylibTextureMode<'a, 'b, T>(&'a mut T, &'b mut RenderTexture2D);
 
-impl<'a, T> Drop for RaylibTextureMode<'a, T> {
+impl<T> Drop for RaylibTextureMode<'_, '_, T> {
     fn drop(&mut self) {
-        unsafe { ffi::EndTextureMode() }
+        unsafe {
+            ffi::EndTextureMode();
+        }
     }
 }
-impl<'a, T> std::ops::Deref for RaylibTextureMode<'a, T> {
+impl<T> std::ops::Deref for RaylibTextureMode<'_, '_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<'a, T> std::ops::DerefMut for RaylibTextureMode<'a, T> {
+impl<T> std::ops::DerefMut for RaylibTextureMode<'_, '_, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.0
     }
 }
-// framebuffer: &'a mut ffi::RenderTexture2D,
 
 pub trait RaylibTextureModeExt
 where
     Self: Sized,
 {
     /// Begin drawing to render texture.
-    /// Prefer using the closure version, [RaylibTextureModeExt::draw_texture_mode] . This version returns a handle that calls [raylib_sys::EndTextureMode] at the end of the scope and is provided as a fallback incase you run into issues with closures(such as lifetime or performance reasons)
-    #[must_use]
-    fn begin_texture_mode<'a>(
+    fn draw_texture_mode<'a, 'b>(
         &'a mut self,
         _: &RaylibThread,
-        framebuffer: &'a mut ffi::RenderTexture2D,
-    ) -> RaylibTextureMode<Self> {
-        unsafe { ffi::BeginTextureMode(*framebuffer) }
-        RaylibTextureMode(self, framebuffer)
-    }
-
-    fn draw_texture_mode<'a>(
-        &'a mut self,
-        _: &RaylibThread,
-        framebuffer: &'a mut ffi::RenderTexture2D,
-        mut func: impl FnMut(RaylibTextureMode<Self>),
+        framebuffer: &'b mut RenderTexture2D,
+        func: impl FnOnce(&mut RaylibTextureMode<'a, 'b, Self>),
     ) {
-        unsafe { ffi::BeginTextureMode(*framebuffer) }
-        func(RaylibTextureMode(self, framebuffer));
+        unsafe {
+            ffi::BeginTextureMode(**framebuffer);
+        }
+        func(&mut RaylibTextureMode(self, framebuffer));
     }
 }
 
 // Only the DrawHandle and the RaylibHandle can start a texture
-impl<'a> RaylibTextureModeExt for RaylibDrawHandle<'a> {}
+impl RaylibTextureModeExt for RaylibDrawHandle<'_> {}
 impl RaylibTextureModeExt for RaylibHandle {}
-impl<'a, T> RaylibDraw for RaylibTextureMode<'a, T> {}
+impl<T> RaylibDraw for RaylibTextureMode<'_, '_, T> {}
 
 // VR Stuff
 
-pub struct RaylibVRMode<'a, T>(&'a T, &'a mut VrStereoConfig);
-impl<'a, T> Drop for RaylibVRMode<'a, T> {
+pub struct RaylibVRMode<'a, 'b, T>(&'a T, &'b mut VrStereoConfig);
+impl<T> Drop for RaylibVRMode<'_, '_, T> {
     fn drop(&mut self) {
-        unsafe { ffi::EndVrStereoMode() }
+        unsafe {
+            ffi::EndVrStereoMode();
+        }
     }
 }
-impl<'a, T> std::ops::Deref for RaylibVRMode<'a, T> {
+impl<T> std::ops::Deref for RaylibVRMode<'_, '_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -157,36 +126,29 @@ where
     Self: Sized,
 {
     /// Begin stereo rendering (requires VR simulator).
-    /// Prefer using the closure version, [RaylibVRModeExt::draw_vr_stereo_mode] . This version returns a handle that calls [raylib_sys::EndVrStereoMode] at the end of the scope and is provided as a fallback incase you run into issues with closures(such as lifetime or performance reasons)
-    #[must_use]
-    fn begin_vr_stereo_mode<'a>(
+    fn draw_vr_stereo_mode<'a, 'b>(
         &'a mut self,
-        _: &RaylibThread,
-        vr_config: &'a mut VrStereoConfig,
-    ) -> RaylibVRMode<Self> {
-        unsafe { ffi::BeginVrStereoMode(*vr_config.as_ref()) }
-        RaylibVRMode(self, vr_config)
-    }
-
-    fn draw_vr_stereo_mode<'a>(
-        &'a mut self,
-        vr_config: &'a mut VrStereoConfig,
-        mut func: impl FnMut(RaylibVRMode<Self>),
+        vr_config: &'b mut VrStereoConfig,
+        func: impl FnOnce(&mut RaylibVRMode<'a, 'b, Self>),
     ) {
-        unsafe { ffi::BeginVrStereoMode(*vr_config.as_ref()) }
-        func(RaylibVRMode(&self, vr_config));
+        unsafe {
+            ffi::BeginVrStereoMode(*vr_config.as_ref());
+        }
+        func(&mut RaylibVRMode(self, vr_config));
     }
 }
 
 impl<D: RaylibDraw> RaylibVRModeExt for D {}
-impl<'a, T> RaylibDraw for RaylibVRMode<'a, T> {}
+impl<T> RaylibDraw for RaylibVRMode<'_, '_, T> {}
 
 // 2D Mode
 
 pub struct RaylibMode2D<'a, T>(&'a mut T);
 impl<'a, T> Drop for RaylibMode2D<'a, T> {
     fn drop(&mut self) {
-        unsafe { ffi::EndMode2D() }
+        unsafe {
+            ffi::EndMode2D();
+        }
     }
 }
 impl<'a, T> std::ops::Deref for RaylibMode2D<'a, T> {
@@ -207,51 +169,40 @@ where
     Self: Sized,
 {
     /// Begin 2D mode with custom camera (2D).
-    /// Prefer using the closure version, [RaylibMode2DExt::draw_mode2D]. This version returns a handle that calls [raylib_sys::EndMode2D] at the end of the scope and is provided as a fallback incase you run into issues with closures(such as lifetime or performance reasons)
     #[allow(non_snake_case)]
-    #[must_use]
-    fn begin_mode2D(&mut self, camera: impl Into<ffi::Camera2D>) -> RaylibMode2D<Self> {
-        unsafe {
-            ffi::BeginMode2D(camera.into());
-        }
-        RaylibMode2D(self)
-    }
-
-    #[allow(non_snake_case)]
-    fn draw_mode2D(
-        &mut self,
-        camera: Camera2D,
-        mut func: impl FnMut(RaylibMode2D<Self>, Camera2D),
+    fn draw_mode2D<'a>(
+        &'a mut self,
+        camera: &Camera2D,
+        func: impl FnOnce(RaylibMode2D<'a, Self>),
     ) {
         unsafe {
             ffi::BeginMode2D(camera.into());
         }
-        func(RaylibMode2D(self), camera);
-        unsafe {
-            ffi::EndMode2D();
-        }
+        func(RaylibMode2D(self));
     }
 }
 
 impl<D: RaylibDraw> RaylibMode2DExt for D {}
-impl<'a, T> RaylibDraw for RaylibMode2D<'a, T> {}
+impl<T> RaylibDraw for RaylibMode2D<'_, T> {}
 
 // 3D Mode
 
 pub struct RaylibMode3D<'a, T>(&'a mut T);
-impl<'a, T> Drop for RaylibMode3D<'a, T> {
+impl<T> Drop for RaylibMode3D<'_, T> {
     fn drop(&mut self) {
-        unsafe { ffi::EndMode3D() }
+        unsafe {
+            ffi::EndMode3D();
+        }
     }
 }
-impl<'a, T> std::ops::Deref for RaylibMode3D<'a, T> {
+impl<T> std::ops::Deref for RaylibMode3D<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<'a, T> std::ops::DerefMut for RaylibMode3D<'a, T> {
+impl<T> std::ops::DerefMut for RaylibMode3D<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.0
     }
@@ -262,29 +213,16 @@ where
     Self: Sized,
 {
     /// Begin 3D mode with custom camera (3D).
-    /// Prefer using the closure version, [RaylibMode3DExt::draw_mode3D]. This version returns a handle that calls [raylib_sys::EndMode3D] at the end of the scope and is provided as a fallback incase you run into issues with closures(such as lifetime or performance reasons)
     #[allow(non_snake_case)]
-    #[must_use]
-    fn begin_mode3D(&mut self, camera: impl Into<ffi::Camera3D>) -> RaylibMode3D<Self> {
-        unsafe {
-            ffi::BeginMode3D(camera.into());
-        }
-        RaylibMode3D(self)
-    }
-
-    #[allow(non_snake_case)]
-    fn draw_mode3D(
-        &mut self,
-        camera: Camera3D,
-        mut func: impl FnMut(RaylibMode3D<Self>, Camera3D),
+    fn draw_mode3D<'a>(
+        &'a mut self,
+        camera: &Camera3D,
+        func: impl FnOnce(&mut RaylibMode3D<'a, Self>),
     ) {
         unsafe {
             ffi::BeginMode3D(camera.into());
         }
-        func(RaylibMode3D(self), camera);
-        unsafe {
-            ffi::EndMode3D();
-        }
+        func(&mut RaylibMode3D(self));
     }
 }
 
@@ -294,21 +232,23 @@ impl<'a, T> RaylibDraw3D for RaylibMode3D<'a, T> {}
 
 // shader Mode
 
-pub struct RaylibShaderMode<'a, T>(&'a mut T, &'a mut Shader);
+pub struct RaylibShaderMode<'a, 'b, T>(&'a mut T, &'b mut Shader);
 
-impl<'a, T> Drop for RaylibShaderMode<'a, T> {
+impl<T> Drop for RaylibShaderMode<'_, '_, T> {
     fn drop(&mut self) {
-        unsafe { ffi::EndShaderMode() }
+        unsafe {
+            ffi::EndShaderMode();
+        }
     }
 }
-impl<'a, T> std::ops::Deref for RaylibShaderMode<'a, T> {
+impl<T> std::ops::Deref for RaylibShaderMode<'_, '_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<'a, T> std::ops::DerefMut for RaylibShaderMode<'a, T> {
+impl<T> std::ops::DerefMut for RaylibShaderMode<'_, '_, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.0
     }
@@ -319,43 +259,38 @@ where
     Self: Sized,
 {
     /// Begin custom shader drawing.
-    /// Prefer using the closure version, [RaylibShaderModeExt::draw_shader_mode]. This version returns a handle that calls [raylib_sys::EndShaderMode] at the end of the scope and is provided as a fallback incase you run into issues with closures(such as lifetime or performance reasons)
-    #[must_use]
-    fn begin_shader_mode<'a>(&'a mut self, shader: &'a mut Shader) -> RaylibShaderMode<Self> {
-        unsafe { ffi::BeginShaderMode(*shader.as_ref()) }
-        RaylibShaderMode(self, shader)
-    }
-
-    fn draw_shader_mode<'a>(
+    fn draw_shader_mode<'a, 'b>(
         &'a mut self,
-        shader: &'a mut Shader,
-        mut func: impl FnMut(RaylibShaderMode<Self>),
+        shader: &'b mut Shader,
+        func: impl FnOnce(&mut RaylibShaderMode<'a, 'b, Self>),
     ) {
         unsafe { ffi::BeginShaderMode(*shader.as_ref()) }
-        func(RaylibShaderMode(self, shader));
+        func(&mut RaylibShaderMode(self, shader));
     }
 }
 
 impl<D: RaylibDraw> RaylibShaderModeExt for D {}
-impl<'a, T> RaylibDraw for RaylibShaderMode<'a, T> {}
-impl<'a, T> RaylibDraw3D for RaylibShaderMode<'a, T> {}
+impl<T> RaylibDraw for RaylibShaderMode<'_, '_, T> {}
+impl<T> RaylibDraw3D for RaylibShaderMode<'_, '_, T> {}
 
 // Blend Mode
 
 pub struct RaylibBlendMode<'a, T>(&'a mut T);
-impl<'a, T> Drop for RaylibBlendMode<'a, T> {
+impl<T> Drop for RaylibBlendMode<'_, T> {
     fn drop(&mut self) {
-        unsafe { ffi::EndBlendMode() }
+        unsafe {
+            ffi::EndBlendMode();
+        }
     }
 }
-impl<'a, T> std::ops::Deref for RaylibBlendMode<'a, T> {
+impl<T> std::ops::Deref for RaylibBlendMode<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<'a, T> std::ops::DerefMut for RaylibBlendMode<'a, T> {
+impl<T> std::ops::DerefMut for RaylibBlendMode<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.0
     }
@@ -366,43 +301,40 @@ where
     Self: Sized,
 {
     /// Begin blending mode (alpha, additive, multiplied, subtract, custom).
-    /// Prefer using the closure version, [RaylibBlendModeExt::draw_blend_mode]. This version returns a handle that calls [raylib_sys::EndBlendMode] at the end of the scope and is provided as a fallback incase you run into issues with closures(such as lifetime or performance reasons)
-    #[must_use]
-    fn begin_blend_mode(&mut self, blend_mode: crate::consts::BlendMode) -> RaylibBlendMode<Self> {
-        unsafe { ffi::BeginBlendMode((blend_mode as u32) as i32) }
-        RaylibBlendMode(self)
-    }
-
-    fn draw_blend_mode(
-        &mut self,
+    fn draw_blend_mode<'a>(
+        &'a mut self,
         blend_mode: crate::consts::BlendMode,
-        mut func: impl FnMut(RaylibBlendMode<Self>),
+        func: impl FnOnce(&mut RaylibBlendMode<'a, Self>),
     ) {
-        unsafe { ffi::BeginBlendMode((blend_mode as u32) as i32) }
-        func(RaylibBlendMode(self));
+        unsafe {
+            ffi::BeginBlendMode((blend_mode as u32) as i32);
+        }
+        func(&mut RaylibBlendMode(self));
     }
 }
 
 impl<D: RaylibDraw> RaylibBlendModeExt for D {}
-impl<'a, T> RaylibDraw for RaylibBlendMode<'a, T> {}
-impl<'a, T> RaylibDraw3D for RaylibBlendMode<'a, T> {}
+impl<T> RaylibDraw for RaylibBlendMode<'_, T> {}
+impl<T> RaylibDraw3D for RaylibBlendMode<'_, T> {}
 
 // Scissor Mode stuff
 
 pub struct RaylibScissorMode<'a, T>(&'a mut T);
-impl<'a, T> Drop for RaylibScissorMode<'a, T> {
+impl<T> Drop for RaylibScissorMode<'_, T> {
     fn drop(&mut self) {
-        unsafe { ffi::EndScissorMode() }
+        unsafe {
+            ffi::EndScissorMode();
+        }
     }
 }
-impl<'a, T> std::ops::Deref for RaylibScissorMode<'a, T> {
+impl<T> std::ops::Deref for RaylibScissorMode<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<'a, T> std::ops::DerefMut for RaylibScissorMode<'a, T> {
+impl<T> std::ops::DerefMut for RaylibScissorMode<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.0
     }
@@ -413,35 +345,24 @@ where
     Self: Sized,
 {
     /// Begin scissor mode (define screen area for following drawing).
-    /// Prefer using the closure version, [RaylibScissorModeExt::draw_scissor_mode]. This version returns a handle that calls [raylib_sys::EndScissorMode] at the end of the scope and is provided as a fallback incase you run into issues with closures(such as lifetime or performance reasons)
-    #[must_use]
-    fn begin_scissor_mode(
-        &mut self,
+    fn draw_scissor_mode<'a>(
+        &'a mut self,
         x: i32,
         y: i32,
         width: i32,
         height: i32,
-    ) -> RaylibScissorMode<Self> {
-        unsafe { ffi::BeginScissorMode(x, y, width, height) }
-        RaylibScissorMode(self)
-    }
-
-    fn draw_scissor_mode(
-        &mut self,
-        x: i32,
-        y: i32,
-        width: i32,
-        height: i32,
-        mut func: impl FnMut(RaylibScissorMode<Self>),
+        func: impl FnOnce(&mut RaylibScissorMode<'a, Self>),
     ) {
-        unsafe { ffi::BeginScissorMode(x, y, width, height) }
-        func(RaylibScissorMode(self));
+        unsafe {
+            ffi::BeginScissorMode(x, y, width, height);
+        }
+        func(&mut RaylibScissorMode(self));
     }
 }
 
 impl<D: RaylibDraw> RaylibScissorModeExt for D {}
-impl<'a, T> RaylibDraw for RaylibScissorMode<'a, T> {}
-impl<'a, T: RaylibDraw3D> RaylibDraw3D for RaylibScissorMode<'a, T> {}
+impl<T> RaylibDraw for RaylibScissorMode<'_, T> {}
+impl<T: RaylibDraw3D> RaylibDraw3D for RaylibScissorMode<'_, T> {}
 
 // Actual drawing functions
 
@@ -461,7 +382,9 @@ pub trait RaylibDraw {
 
     /// Get texture source rectangle that is used for shapes drawing
     fn get_shapes_texture_rectangle(&self) -> Rectangle {
-        unsafe { ffi::GetShapesTextureRectangle() }
+        unsafe {
+            ffi::GetShapesTextureRectangle()
+        }
     }
 
     /// Define default texture used to draw shapes
@@ -470,7 +393,9 @@ pub trait RaylibDraw {
         texture: impl AsRef<ffi::Texture2D>,
         source: impl Into<ffi::Rectangle>,
     ) {
-        unsafe { ffi::SetShapesTexture(*texture.as_ref(), source.into()) }
+        unsafe {
+            ffi::SetShapesTexture(*texture.as_ref(), source.into())
+        }
     }
 
     // // Draw gui widget
@@ -551,12 +476,15 @@ pub trait RaylibDraw {
         }
     }
 
-    /// Draw lines sequence    #[inline]
+    /// Draw lines sequence
+    #[inline]
     fn draw_line_strip(&mut self, points: &[Vector2], color: impl Into<ffi::Color>) {
+        let point_count = points.len();
+        assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
             ffi::DrawLineStrip(
                 points.as_ptr() as *mut ffi::Vector2,
-                points.len() as i32,
+                point_count as i32,
                 color.into(),
             );
         }
@@ -786,7 +714,11 @@ pub trait RaylibDraw {
 
     /// Draws a color-filled rectangle from `rec`.
     #[inline]
-    fn draw_rectangle_rec(&mut self, rec: impl Into<ffi::Rectangle>, color: impl Into<ffi::Color>) {
+    fn draw_rectangle_rec(
+        &mut self,
+        rec: impl Into<ffi::Rectangle>,
+        color: impl Into<ffi::Color>,
+    ) {
         unsafe {
             ffi::DrawRectangleRec(rec.into(), color.into());
         }
@@ -970,10 +902,12 @@ pub trait RaylibDraw {
     /// Draw a triangle fan defined by points.
     #[inline]
     fn draw_triangle_fan(&mut self, points: &[Vector2], color: impl Into<ffi::Color>) {
+        let point_count = points.len();
+        assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
             ffi::DrawTriangleFan(
                 points.as_ptr() as *mut ffi::Vector2,
-                points.len() as i32,
+                point_count as i32,
                 color.into(),
             );
         }
@@ -982,10 +916,12 @@ pub trait RaylibDraw {
     /// Draw a triangle strip defined by points
     #[inline]
     fn draw_triangle_strip(&mut self, points: &[Vector2], color: impl Into<ffi::Color>) {
+        let point_count = points.len();
+        assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
             ffi::DrawTriangleStrip(
                 points.as_ptr() as *mut ffi::Vector2,
-                points.len() as i32,
+                point_count as i32,
                 color.into(),
             );
         }
@@ -1166,7 +1102,7 @@ pub trait RaylibDraw {
         &mut self,
         font: impl AsRef<ffi::Font>,
         text: &str,
-        position: Vector2,
+        position: impl Into<ffi::Vector2>,
         font_size: f32,
         spacing: f32,
         tint: impl Into<ffi::Color>,
@@ -1261,18 +1197,22 @@ pub trait RaylibDraw {
 
     /// Enable waiting for events when the handle is dropped, no automatic event polling
     fn enable_event_waiting(&self) {
-        unsafe { ffi::EnableEventWaiting() }
+        unsafe {
+            ffi::EnableEventWaiting();
+        }
     }
 
     /// Disable waiting for events when the handle is dropped, no automatic event polling
     fn disable_event_waiting(&self) {
-        unsafe { ffi::DisableEventWaiting() }
+        unsafe {
+            ffi::DisableEventWaiting();
+        }
     }
 
     /// Draw a polygon outline of n sides with extended parameters
     fn draw_poly_lines_ex(
         &mut self,
-        center: Vector2,
+        center: impl Into<ffi::Vector2>,
         sides: i32,
         radius: f32,
         rotation: f32,
@@ -1292,24 +1232,28 @@ pub trait RaylibDraw {
     }
     /// Draw spline: Linear, minimum 2 points
     fn draw_spline_linear(&mut self, points: &[Vector2], thick: f32, color: impl Into<ffi::Color>) {
+        let point_count = points.len();
+        assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
             ffi::DrawSplineLinear(
                 points.as_ptr() as *mut ffi::Vector2,
-                points.len() as i32,
+                point_count as i32,
                 thick,
                 color.into(),
-            )
+            );
         }
     }
     /// Draw spline: B-Spline, minimum 4 points
     fn draw_spline_basis(&mut self, points: &[Vector2], thick: f32, color: impl Into<ffi::Color>) {
+        let point_count = points.len();
+        assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
             ffi::DrawSplineBasis(
                 points.as_ptr() as *mut ffi::Vector2,
-                points.len() as i32,
+                point_count as i32,
                 thick,
                 color.into(),
-            )
+            );
         }
     }
     /// Draw spline: Catmull-Rom, minimum 4 points
@@ -1319,13 +1263,15 @@ pub trait RaylibDraw {
         thick: f32,
         color: impl Into<ffi::Color>,
     ) {
+        let point_count = points.len();
+        assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
             ffi::DrawSplineCatmullRom(
                 points.as_ptr() as *mut ffi::Vector2,
-                points.len() as i32,
+                point_count as i32,
                 thick,
                 color.into(),
-            )
+            );
         }
     }
 
@@ -1336,13 +1282,15 @@ pub trait RaylibDraw {
         thick: f32,
         color: impl Into<ffi::Color>,
     ) {
+        let point_count = points.len();
+        assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
             ffi::DrawSplineBezierQuadratic(
                 points.as_ptr() as *mut ffi::Vector2,
-                points.len() as i32,
+                point_count as i32,
                 thick,
                 color.into(),
-            )
+            );
         }
     }
 
@@ -1353,34 +1301,38 @@ pub trait RaylibDraw {
         thick: f32,
         color: impl Into<ffi::Color>,
     ) {
+        let point_count = points.len();
+        assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
             ffi::DrawSplineBezierCubic(
                 points.as_ptr() as *mut ffi::Vector2,
-                points.len() as i32,
+                point_count as i32,
                 thick,
                 color.into(),
-            )
+            );
         }
     }
 
     /// Draw spline segment: Linear, 2 points
     fn draw_spline_segment_linear(
         &mut self,
-        p1: Vector2,
-        p2: Vector2,
+        p1: impl Into<ffi::Vector2>,
+        p2: impl Into<ffi::Vector2>,
         thick: f32,
         color: impl Into<ffi::Color>,
     ) {
-        unsafe { ffi::DrawSplineSegmentLinear(p1.into(), p2.into(), thick, color.into()) }
+        unsafe {
+            ffi::DrawSplineSegmentLinear(p1.into(), p2.into(), thick, color.into());
+        }
     }
 
     /// Draw spline segment: B-Spline, 4 points
     fn draw_spline_segment_basis(
         &mut self,
-        p1: Vector2,
-        p2: Vector2,
-        p3: Vector2,
-        p4: Vector2,
+        p1: impl Into<ffi::Vector2>,
+        p2: impl Into<ffi::Vector2>,
+        p3: impl Into<ffi::Vector2>,
+        p4: impl Into<ffi::Vector2>,
         thick: f32,
         color: impl Into<ffi::Color>,
     ) {
@@ -1399,10 +1351,10 @@ pub trait RaylibDraw {
     /// Draw spline segment: Catmull-Rom, 4 points
     fn draw_spline_segment_catmull_rom(
         &mut self,
-        p1: Vector2,
-        p2: Vector2,
-        p3: Vector2,
-        p4: Vector2,
+        p1: impl Into<ffi::Vector2>,
+        p2: impl Into<ffi::Vector2>,
+        p3: impl Into<ffi::Vector2>,
+        p4: impl Into<ffi::Vector2>,
         thick: f32,
         color: impl Into<ffi::Color>,
     ) {
@@ -1421,9 +1373,9 @@ pub trait RaylibDraw {
     /// Draw spline segment: Quadratic Bezier, 2 points, 1 control point
     fn draw_spline_segment_bezier_quadratic(
         &mut self,
-        p1: Vector2,
-        c2: Vector2,
-        p3: Vector2,
+        p1: impl Into<ffi::Vector2>,
+        c2: impl Into<ffi::Vector2>,
+        p3: impl Into<ffi::Vector2>,
         thick: f32,
         color: impl Into<ffi::Color>,
     ) {
@@ -1441,10 +1393,10 @@ pub trait RaylibDraw {
     /// Draw spline segment: Cubic Bezier, 2 points, 2 control points
     fn draw_spline_segment_bezier_cubic(
         &mut self,
-        p1: Vector2,
-        c2: Vector2,
-        c3: Vector2,
-        p4: Vector2,
+        p1: impl Into<ffi::Vector2>,
+        c2: impl Into<ffi::Vector2>,
+        c3: impl Into<ffi::Vector2>,
+        p4: impl Into<ffi::Vector2>,
         thick: f32,
         color: impl Into<ffi::Color>,
     ) {
@@ -1461,29 +1413,33 @@ pub trait RaylibDraw {
     }
 
     /// Get (evaluate) spline point: Linear
-    fn get_spline_point_linear(&mut self, start_pos: Vector2, end_pos: Vector2, t: f32) -> Vector2 {
-        unsafe { ffi::GetSplinePointLinear(start_pos.into(), end_pos.into(), t).into() }
+    fn get_spline_point_linear(&mut self, start_pos: impl Into<ffi::Vector2>, end_pos: impl Into<ffi::Vector2>, t: f32) -> Vector2 {
+        unsafe {
+            ffi::GetSplinePointLinear(start_pos.into(), end_pos.into(), t).into()
+        }
     }
 
     /// Get (evaluate) spline point: B-Spline
     fn get_spline_point_basis(
         &mut self,
-        p1: Vector2,
-        p2: Vector2,
-        p3: Vector2,
-        p4: Vector2,
+        p1: impl Into<ffi::Vector2>,
+        p2: impl Into<ffi::Vector2>,
+        p3: impl Into<ffi::Vector2>,
+        p4: impl Into<ffi::Vector2>,
         t: f32,
     ) -> Vector2 {
-        unsafe { ffi::GetSplinePointBasis(p1.into(), p2.into(), p3.into(), p4.into(), t).into() }
+        unsafe {
+            ffi::GetSplinePointBasis(p1.into(), p2.into(), p3.into(), p4.into(), t).into()
+        }
     }
 
     /// Get (evaluate) spline point: Catmull-Rom
     fn get_spline_point_catmull_rom(
         &mut self,
-        p1: Vector2,
-        p2: Vector2,
-        p3: Vector2,
-        p4: Vector2,
+        p1: impl Into<ffi::Vector2>,
+        p2: impl Into<ffi::Vector2>,
+        p3: impl Into<ffi::Vector2>,
+        p4: impl Into<ffi::Vector2>,
         t: f32,
     ) -> Vector2 {
         unsafe {
@@ -1494,20 +1450,22 @@ pub trait RaylibDraw {
     /// Get (evaluate) spline point: Quadratic Bezier
     fn get_spline_point_bezier_quad(
         &mut self,
-        p1: Vector2,
-        c2: Vector2,
-        p3: Vector2,
+        p1: impl Into<ffi::Vector2>,
+        c2: impl Into<ffi::Vector2>,
+        p3: impl Into<ffi::Vector2>,
         t: f32,
     ) -> Vector2 {
-        unsafe { ffi::GetSplinePointBezierQuad(p1.into(), c2.into(), p3.into(), t).into() }
+        unsafe {
+            ffi::GetSplinePointBezierQuad(p1.into(), c2.into(), p3.into(), t).into()
+        }
     }
 
     fn get_spline_point_bezier_cubic(
         &mut self,
-        p1: Vector2,
-        c2: Vector2,
-        c3: Vector2,
-        p4: Vector2,
+        p1: impl Into<ffi::Vector2>,
+        c2: impl Into<ffi::Vector2>,
+        c3: impl Into<ffi::Vector2>,
+        p4: impl Into<ffi::Vector2>,
         t: f32,
     ) -> Vector2 {
         unsafe {
@@ -1545,8 +1503,14 @@ pub trait RaylibDraw3D {
     #[allow(non_snake_case)]
     #[inline]
     fn draw_triangle_strip3D(&mut self, points: &[Vector3], color: impl Into<ffi::Color>) {
+        let point_count = points.len();
+        assert!(point_count <= i32::MAX as usize, "invalid point count");
         unsafe {
-            ffi::DrawTriangleStrip3D(points.as_ptr() as *mut _, points.len() as i32, color.into());
+            ffi::DrawTriangleStrip3D(
+                points.as_ptr() as *mut ffi::Vector3,
+                point_count as i32,
+                color.into(),
+            );
         }
     }
 
@@ -1650,7 +1614,9 @@ pub trait RaylibDraw3D {
         material: WeakMaterial,
         transform: Matrix,
     ) {
-        unsafe { ffi::DrawMesh(*mesh.as_ref(), material.0, transform.into()) }
+        unsafe {
+            ffi::DrawMesh(*mesh.as_ref(), material.0, transform.into());
+        }
     }
 
     /// Draw multiple mesh instances with material and different transforms
@@ -1664,9 +1630,17 @@ pub trait RaylibDraw3D {
         let tr = transforms
             .iter()
             .map(|f| f.into())
-            .collect::<Vec<ffi::Matrix>>()
-            .as_ptr();
-        unsafe { ffi::DrawMeshInstanced(*mesh.as_ref(), material.0, tr, transforms.len() as i32) }
+            .collect::<Vec<ffi::Matrix>>();
+        let transform_count = transforms.len();
+        assert!(transform_count <= i32::MAX as usize, "invalid transform count");
+        unsafe {
+            ffi::DrawMeshInstanced(
+                *mesh.as_ref(),
+                material.0,
+                tr.as_ptr(),
+                transform_count as i32,
+            )
+        }
     }
 
     /// Draws a sphere.
@@ -1982,7 +1956,7 @@ pub trait RaylibDraw3D {
     #[inline]
     fn draw_billboard_rec(
         &mut self,
-        camera: Camera3D,
+        camera: impl Into<ffi::Camera3D>,
         texture: &Texture2D,
         source_rec: impl Into<ffi::Rectangle>,
         center: impl Into<ffi::Vector3>,

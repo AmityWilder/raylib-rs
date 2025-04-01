@@ -9,13 +9,17 @@ impl Rectangle {
     /// Check collision between two rectangles
     #[inline]
     pub fn check_collision_recs(&self, other: &Rectangle) -> bool {
-        unsafe { ffi::CheckCollisionRecs(self.into(), other.into()) }
+        unsafe {
+            ffi::CheckCollisionRecs(self.into(), other.into())
+        }
     }
 
     /// Checks collision between circle and rectangle.
     #[inline]
     pub fn check_collision_circle_rec(&self, center: impl Into<ffi::Vector2>, radius: f32) -> bool {
-        unsafe { ffi::CheckCollisionCircleRec(center.into(), radius, self.into()) }
+        unsafe {
+            ffi::CheckCollisionCircleRec(center.into(), radius, self.into())
+        }
     }
 
     /// Gets the overlap between two colliding rectangles.
@@ -33,13 +37,15 @@ impl Rectangle {
         if self.check_collision_recs(other) {
             return Some(unsafe { ffi::GetCollisionRec(self.into(), other.into()).into() });
         }
-        return None;
+        None
     }
 
     /// Checks if point is inside rectangle.
     #[inline]
     pub fn check_collision_point_rec(&self, point: impl Into<ffi::Vector2>) -> bool {
-        unsafe { ffi::CheckCollisionPointRec(point.into(), self.into()) }
+        unsafe {
+            ffi::CheckCollisionPointRec(point.into(), self.into())
+        }
     }
 
     /// Check if circle collides with a line created betweeen two points [p1] and [p2]
@@ -50,7 +56,9 @@ impl Rectangle {
         p1: impl Into<ffi::Vector2>,
         p2: impl Into<ffi::Vector2>,
     ) -> bool {
-        unsafe { ffi::CheckCollisionCircleLine(center.into(), radius, p1.into(), p2.into()) }
+        unsafe {
+            ffi::CheckCollisionCircleLine(center.into(), radius, p1.into(), p2.into())
+        }
     }
 }
 
@@ -63,7 +71,9 @@ pub fn check_collision_circles(
     center2: impl Into<ffi::Vector2>,
     radius2: f32,
 ) -> bool {
-    unsafe { ffi::CheckCollisionCircles(center1.into(), radius1, center2.into(), radius2) }
+    unsafe {
+        ffi::CheckCollisionCircles(center1.into(), radius1, center2.into(), radius2)
+    }
 }
 
 /// Checks if point is inside circle.
@@ -73,11 +83,13 @@ pub fn check_collision_point_circle(
     center: impl Into<ffi::Vector2>,
     radius: f32,
 ) -> bool {
-    unsafe { ffi::CheckCollisionPointCircle(point.into(), center.into(), radius) }
+    unsafe {
+        ffi::CheckCollisionPointCircle(point.into(), center.into(), radius)
+    }
 }
 
 /// Check if point is within a polygon described by array of vertices
-pub fn check_collision_point_poly(point: Vector2, points: &[Vector2]) -> bool {
+pub fn check_collision_point_poly(point: impl Into<ffi::Vector2>, points: &[Vector2]) -> bool {
     unsafe {
         ffi::CheckCollisionPointPoly(
             point.into(),
@@ -89,12 +101,14 @@ pub fn check_collision_point_poly(point: Vector2, points: &[Vector2]) -> bool {
 
 /// Check if point belongs to line created between two points [p1] and [p2] with defined margin in pixels [threshold]
 pub fn check_collision_point_line(
-    point: Vector2,
-    p1: Vector2,
-    p2: Vector2,
+    point: impl Into<ffi::Vector2>,
+    p1: impl Into<ffi::Vector2>,
+    p2: impl Into<ffi::Vector2>,
     threshold: i32,
 ) -> bool {
-    unsafe { ffi::CheckCollisionPointLine(point.into(), p1.into(), p2.into(), threshold) }
+    unsafe {
+        ffi::CheckCollisionPointLine(point.into(), p1.into(), p2.into(), threshold)
+    }
 }
 
 /// Checks if point is inside a triangle.
@@ -105,7 +119,9 @@ pub fn check_collision_point_triangle(
     p2: impl Into<ffi::Vector2>,
     p3: impl Into<ffi::Vector2>,
 ) -> bool {
-    unsafe { ffi::CheckCollisionPointTriangle(point.into(), p1.into(), p2.into(), p3.into()) }
+    unsafe {
+        ffi::CheckCollisionPointTriangle(point.into(), p1.into(), p2.into(), p3.into())
+    }
 }
 
 /// Check the collision between two lines defined by two points each, returns collision point by reference
@@ -128,9 +144,9 @@ pub fn check_collision_lines(
         )
     };
     if collision {
-        return Some(out.into());
+        Some(out.into())
     } else {
-        return None;
+        None
     }
 }
 
@@ -142,14 +158,18 @@ pub fn check_collision_spheres(
     center_b: impl Into<ffi::Vector3>,
     radius_b: f32,
 ) -> bool {
-    unsafe { ffi::CheckCollisionSpheres(center_a.into(), radius_a, center_b.into(), radius_b) }
+    unsafe {
+        ffi::CheckCollisionSpheres(center_a.into(), radius_a, center_b.into(), radius_b)
+    }
 }
 
 impl BoundingBox {
     /// Detects collision between two boxes.
     #[inline]
-    pub fn check_collision_boxes(&self, box2: BoundingBox) -> bool {
-        unsafe { ffi::CheckCollisionBoxes(self.into(), box2.into()) }
+    pub fn check_collision_boxes(&self, box2: &BoundingBox) -> bool {
+        unsafe {
+            ffi::CheckCollisionBoxes(self.into(), box2.into())
+        }
     }
 
     /// Detects collision between box and sphere.
@@ -159,13 +179,17 @@ impl BoundingBox {
         center_sphere: impl Into<ffi::Vector3>,
         radius_sphere: f32,
     ) -> bool {
-        unsafe { ffi::CheckCollisionBoxSphere(self.into(), center_sphere.into(), radius_sphere) }
+        unsafe {
+            ffi::CheckCollisionBoxSphere(self.into(), center_sphere.into(), radius_sphere)
+        }
     }
 
     /// Detects collision between ray and box.
     #[inline]
     pub fn get_ray_collision_box(&self, ray: Ray) -> RayCollision {
-        unsafe { ffi::GetRayCollisionBox(ray.into(), self.into()).into() }
+        unsafe {
+            ffi::GetRayCollisionBox(ray.into(), self.into()).into()
+        }
     }
 }
 
@@ -176,13 +200,17 @@ pub fn get_ray_collision_sphere(
     sphere_position: impl Into<ffi::Vector3>,
     sphere_radius: f32,
 ) -> RayCollision {
-    unsafe { ffi::GetRayCollisionSphere(ray.into(), sphere_position.into(), sphere_radius).into() }
+    unsafe {
+        ffi::GetRayCollisionSphere(ray.into(), sphere_position.into(), sphere_radius).into()
+    }
 }
 
 /// Gets collision info between ray and model.
 #[inline]
 pub fn get_ray_collision_model(ray: Ray, model: &Mesh, transform: &Matrix) -> RayCollision {
-    unsafe { ffi::GetRayCollisionMesh(ray.into(), model.0, transform.into()).into() }
+    unsafe {
+        ffi::GetRayCollisionMesh(ray.into(), model.0, transform.into()).into()
+    }
 }
 
 /// Gets collision info between ray and triangle.
@@ -193,7 +221,9 @@ pub fn get_ray_collision_triangle(
     p2: impl Into<ffi::Vector3>,
     p3: impl Into<ffi::Vector3>,
 ) -> RayCollision {
-    unsafe { ffi::GetRayCollisionTriangle(ray.into(), p1.into(), p2.into(), p3.into()).into() }
+    unsafe {
+        ffi::GetRayCollisionTriangle(ray.into(), p1.into(), p2.into(), p3.into()).into()
+    }
 }
 
 /// Gets collision info between ray and model.
