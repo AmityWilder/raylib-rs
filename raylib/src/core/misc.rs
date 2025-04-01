@@ -10,44 +10,46 @@ use std::usize;
 /// Struct for holding the result of RaylibHandle::load_random_sequence.
 /// This is a thin wrapper for an array of i32. The reason it exists is because Raylib expects you
 /// to unload the sequence it creates manually, and this struct does it for you.
-pub struct RandomSequence<'a>(&'a mut [i32]);
+pub struct RandomSequence(NonNull<i32>, u32);
 
-impl<'a> Deref for RandomSequence<'a> {
+impl Deref for RandomSequence {
     type Target = [i32];
 
     fn deref(&self) -> &Self::Target {
-        self.0
+        std::slice::from_raw_parts(self.0.as_ptr(), self.1 as usize)
     }
 }
 
-impl<'a> DerefMut for RandomSequence<'a> {
+impl DerefMut for RandomSequence {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        std::slice::from_raw_parts_mut(self.0.as_ptr(), self.1 as usize)
     }
 }
 
-impl<'a> Drop for RandomSequence<'a> {
+impl Drop for RandomSequence {
     fn drop(&mut self) {
-        unsafe { ffi::UnloadRandomSequence(self.0.as_mut_ptr()) }
+        unsafe {
+            ffi::UnloadRandomSequence(self.0.as_ptr());
+        }
     }
 }
 
-impl<'a> IntoIterator for RandomSequence<'a> {
+impl IntoIterator for RandomSequence {
     type Item = i32;
 
-    type IntoIter = RandSeqIterator<'a>;
+    type IntoIter = RandSeqIterator;
 
     fn into_iter(self) -> Self::IntoIter {
         RandSeqIterator(self, 0)
     }
 }
-pub struct RandSeqIterator<'a>(RandomSequence<'a>, usize);
+pub struct RandSeqIterator(RandomSequence, u32);
 
-impl<'a> Iterator for RandSeqIterator<'a> {
+impl Iterator for RandSeqIterator {
     type Item = i32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let ret = self.0.get(self.1);
+        let ret = self.0.get(self.1 as usize);
         self.1 += 1;
         match ret {
             Some(a) => Some(*a),
@@ -57,13 +59,14 @@ impl<'a> Iterator for RandSeqIterator<'a> {
 }
 
 /// Open URL with default system browser (if available)
-/// ```ignore
+/// ```no_run
 /// use raylib::*;
 /// fn main() {
 ///     open_url("https://google.com");
 /// }
+/// ```
 pub fn open_url(url: &str) {
-    let s = CString::new(url).expect("Not a string");
+    let s = CString::new(url).unwrap();
     unsafe {
         ffi::OpenURL(s.as_ptr());
     }
@@ -71,15 +74,18 @@ pub fn open_url(url: &str) {
 
 impl RaylibHandle {
     /// Load random values sequence, no values repeated
-    pub fn load_random_sequence<'a>(&self, num: Range<i32>, count: u32) -> RandomSequence<'a> {
-        unsafe {
-            let ptr = ffi::LoadRandomSequence(count, num.start, num.end.into());
-            RandomSequence(std::slice::from_raw_parts_mut(ptr, count as usize))
-        }
+    pub fn load_random_sequence(&self, num: Range<i32>, count: u32) -> Option<RandomSequence> {
+        let ptr = NonNull::new(unsafe {
+            ffi::LoadRandomSequence(count, num.start, num.end.into())
+        })?;
+        Some(RandomSequence(ptr, count))
     }
+
     /// Load pixels from the screen into a CPU image
     pub fn load_image_from_screen(&self, _: &RaylibThread) -> Image {
-        unsafe { Image(ffi::LoadImageFromScreen()) }
+        unsafe {
+            Image(ffi::LoadImageFromScreen())
+        }
     }
 
     /// Takes a screenshot of current screen (saved a .png)
@@ -91,15 +97,18 @@ impl RaylibHandle {
     }
 
     /// Returns a random value between min and max (both included)
-    /// ```ignore
+    /// ```no_run
     /// use raylib::*;
     /// fn main() {
     ///     let (mut rl, thread) = ...;
-    ///     let r = rl.get_random_value(0, 10);
+    ///     let r = rl.get_random_value(0..10);
     ///     println!("random value: {}", r);
     /// }
-    pub fn get_random_value<T: From<i32>>(&self, num: Range<i32>) -> T {
-        unsafe { (ffi::GetRandomValue(num.start, num.end.into()) as i32).into() }
+    /// ```
+    pub fn get_random_value(&self, num: Range<i32>) -> i32 {
+        unsafe {
+            (ffi::GetRandomValue(num.start, num.end.into()) as i32)
+        }
     }
 
     /// Set the seed for random number generation
@@ -109,26 +118,3 @@ impl RaylibHandle {
         }
     }
 }
-
-// lossy conversion to an f32
-pub trait AsF32: Copy {
-    fn as_f32(self) -> f32;
-}
-
-macro_rules! as_f32 {
-    ($ty:ty) => {
-        impl AsF32 for $ty {
-            fn as_f32(self) -> f32 {
-                self as f32
-            }
-        }
-    };
-}
-
-as_f32!(u8);
-as_f32!(u16);
-as_f32!(u32);
-as_f32!(i8);
-as_f32!(i16);
-as_f32!(i32);
-as_f32!(f32);

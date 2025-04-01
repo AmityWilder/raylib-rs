@@ -30,7 +30,7 @@ pub struct Color {
 }
 
 // A convenience function for making a new `Color`.
-pub fn rcolor(r: impl Into<u8>, g: impl Into<u8>, b: impl Into<u8>, a: impl Into<u8>) -> Color {
+pub fn rcolor(r: u8, g: u8, b: u8, a: u8) -> Color {
     Color::new(r.into(), g.into(), b.into(), a.into())
 }
 
@@ -87,13 +87,13 @@ impl Color {
     ///    assert_eq!(color_black, Color::BLACK);
     ///    assert_eq!(color_white, Color::WHITE);
     /// ```
-    pub fn from_hex(color_hex_str: &str) -> Result<Color, std::num::ParseIntError> {
+    pub fn from_hex(color_hex_str: &str) -> Result<Self, std::num::ParseIntError> {
         let color = i32::from_str_radix(color_hex_str,  16)?;
         let b = color % 0x100;
         let g = (color - b) / 0x100 % 0x100;
         let r = (color - g) / 0x10000;
 
-        Ok(Color {
+        Ok(Self {
             r: r as u8,
             g: g as u8,
             b: b as u8,
@@ -109,13 +109,21 @@ impl Color {
     /// Returns hexadecimal value for a Color
     #[inline]
     pub fn to_int(&self) -> i32 {
-        unsafe { ffi::ColorToInt(self.into()) }
+        ((self.r as u32 << 24) |
+         (self.g as u32 << 16) |
+         (self.b as u32 <<  8) |
+          self.a as u32) as i32
     }
 
     /// Returns color normalized as float [0..1]
     #[inline]
     pub fn normalize(&self) -> Vector4 {
-        unsafe { ffi::ColorNormalize(self.into()).into() }
+        Vector4 {
+            x: self.r as f32/255.0,
+            y: self.g as f32/255.0,
+            z: self.b as f32/255.0,
+            w: self.a as f32/255.0,
+        }
     }
 
     /// Returns HSV values for a Color
@@ -138,19 +146,34 @@ impl Color {
     /// }
     /// ```
     #[inline]
-    pub fn from_normalized(normalized: Vector4) -> Color {
-        unsafe { ffi::ColorFromNormalized(normalized.into()).into() }
+    pub fn from_normalized(normalized: Vector4) -> Self {
+        Self {
+            r: (normalized.x*255.0) as u8,
+            g: (normalized.y*255.0) as u8,
+            b: (normalized.z*255.0) as u8,
+            a: (normalized.w*255.0) as u8,
+        }
     }
 
     /// Returns a Color struct from hexadecimal value
     #[inline]
-    pub fn get_color(hex_value: u32) -> Color {
-        unsafe { ffi::GetColor(hex_value).into() }
+    pub fn get_color(hex_value: u32) -> Self {
+        Self {
+            r: (hex_value >> 24) as u8 & 0xFF,
+            g: (hex_value >> 16) as u8 & 0xFF,
+            b: (hex_value >>  8) as u8 & 0xFF,
+            a:  hex_value        as u8 & 0xFF,
+        }
     }
 
     /// Get color multiplied with another color
     pub fn tint(&self, color: Self) -> Self {
-        unsafe { ffi::ColorTint(self.into(), color.into()).into() }
+        Self {
+            r: ((self.r as i32*tint.r as i32)/255) as u8,
+            g: ((self.g as i32*tint.g as i32)/255) as u8,
+            b: ((self.b as i32*tint.b as i32)/255) as u8,
+            a: ((self.a as i32*tint.a as i32)/255) as u8,
+        }
     }
     /// Get color with brightness correction, brightness factor goes from -1.0f to 1.0f
     pub fn brightness(&self, factor: f32) -> Self {
@@ -160,15 +183,23 @@ impl Color {
     pub fn contrast(&self, factor: f32) -> Self {
         unsafe { ffi::ColorContrast(self.into(), factor).into() }
     }
-    /// Get color with alpha applied, alpha goes from 0.0f to 1.0f
-    pub fn alpha(&self, alpha: f32) -> Self {
-        unsafe { ffi::ColorAlpha(self.into(), alpha).into() }
+    /// Get color with alpha applied, alpha goes from 0.0 to 1.0
+    pub fn alpha(&self, mut alpha: f32) -> Self {
+        Self {
+            r: self.r,
+            g: self.g,
+            b: self.b,
+            a: (255.0*alpha.clamp(0.0, 1.0)) as u8,
+        }
     }
-
-    /// Get color with alpha applied, alpha goes from 0.0f to 1.0f
-    #[deprecated = "Use Color::alpha instead"]
-    pub fn fade(&self, alpha: f32) -> Self {
-        unsafe { ffi::Fade(self.into(), alpha).into() }
+    /// Get color with alpha applied, alpha goes from 0 to 255
+    pub const fn alpha_i(&self, mut a: u8) -> Self {
+        Self {
+            r: self.r,
+            g: self.g,
+            b: self.b,
+            a,
+        }
     }
 
     /// Color fade-in or fade-out, alpha goes from 0.0f to 1.0f
@@ -177,13 +208,20 @@ impl Color {
         unsafe { ffi::ColorAlphaBlend(dst.into(), src.into(), tint.into()).into() }
     }
     /// Check if color is equal to another.
-    pub fn is_equal(&self, rhs: impl Into<ffi::Color>) -> bool {
+    pub fn is_equal(&self, rhs: &Color) -> bool {
         unsafe { ffi::ColorIsEqual(self.into(), rhs.into()) }
     }
 
-    /// Get color lerp interpolation between two colors, factor [0.0f..1.0f]
-    pub fn lerp(&self, rhs: Color, factor: f32) -> Color {
-        unsafe { ffi::ColorLerp(self.into(), rhs.into(), factor).into() }
+    /// Get color lerp interpolation between two colors, factor [0.0..1.0]
+    pub fn lerp(&self, rhs: Color, mut factor: f32) -> Color {
+        factor = factor.clamp(0.0, 1.0);
+
+        Color {
+            r: ((1.0 - factor)*self.r as f32 + factor*rhs.r as f32) as u8,
+            g: ((1.0 - factor)*self.g as f32 + factor*rhs.g as f32) as u8,
+            b: ((1.0 - factor)*self.b as f32 + factor*rhs.b as f32) as u8,
+            a: ((1.0 - factor)*self.a as f32 + factor*rhs.a as f32) as u8,
+        }
     }
 }
 

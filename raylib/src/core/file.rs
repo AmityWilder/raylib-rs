@@ -22,11 +22,10 @@ impl FilePathList {
     }
     /// The paths held in this list.
     /// This function is NOT constant and the inner array will be copied into the returned Vec every time you call this.
-    pub fn paths(&self) -> Vec<&str> {
+    pub fn paths(&self) -> impl Iterator<Item = &str> {
         unsafe { std::slice::from_raw_parts(self.0.paths, self.count() as usize) }
             .iter()
             .map(|f| unsafe { CStr::from_ptr(*f) }.to_str().unwrap())
-            .collect()
     }
 }
 
@@ -41,11 +40,10 @@ impl DroppedFilePathList {
     }
     /// The paths held in this list.
     /// This function is NOT constant and the inner array will be copied into the returned Vec every time you call this.
-    pub fn paths(&self) -> Vec<&str> {
+    pub fn paths(&self) -> impl Iterator<Item = &str> {
         unsafe { std::slice::from_raw_parts(self.0.paths, self.count() as usize) }
             .iter()
             .map(|f| unsafe { CStr::from_ptr(*f) }.to_str().unwrap())
-            .collect()
     }
 }
 
@@ -53,7 +51,9 @@ impl RaylibHandle {
     /// Checks if a file has been dropped into the window.
     #[inline]
     pub fn is_file_dropped(&self) -> bool {
-        unsafe { ffi::IsFileDropped() }
+        unsafe {
+            ffi::IsFileDropped()
+        }
     }
 
     /// Checks a file's extension.
@@ -62,25 +62,22 @@ impl RaylibHandle {
     where
         A: Into<OsString>,
     {
+        // .unwrap() is okay here because any nul bytes placed into the actual string should be cleared out by to_string_lossy.
         let file_name = CString::new(file_name.into().to_string_lossy().as_bytes()).unwrap();
         let file_ext = CString::new(file_ext.into().to_string_lossy().as_bytes()).unwrap();
         unsafe { ffi::IsFileExtension(file_name.as_ptr(), file_ext.as_ptr()) }
     }
+
     /// Get the directory of the running application.
     pub fn application_directory(&self) -> String {
-        unsafe {
-            let st = ffi::GetApplicationDirectory();
-            let c_str = CStr::from_ptr(st);
+        let st = unsafe { ffi::GetApplicationDirectory() };
+        let c_str = unsafe { CStr::from_ptr(st) };
 
-            // If this ever errors out, yell at @ioi_xd on Discord,
-            c_str.to_str().unwrap().to_string()
-        }
+        // If this ever errors out, yell at @ioi_xd on Discord,
+        c_str.to_str().unwrap().to_string()
     }
 
     /// Get file length in bytes.
-    ///
-    /// # Errors
-    /// This function will return an error if the supplied bytes contain an internal 0 byte. The NulError returned will contain the bytes as well as the position of the nul byte.
     pub fn get_file_length<A>(&self, filename: A) -> i32
     where
         A: Into<OsString>,
@@ -90,8 +87,6 @@ impl RaylibHandle {
     }
 
     /// Check if a given path is a file or a directory
-    /// # Errors
-    /// This function will return an error if the supplied bytes contain an internal 0 byte. The NulError returned will contain the bytes as well as the position of the nul byte.
     pub fn is_path_file<A>(&self, filename: A) -> bool
     where
         A: Into<OsString>,
@@ -106,7 +101,8 @@ impl RaylibHandle {
         A: Into<OsString>,
     {
         unsafe {
-            let c_str = CString::new(dir_path.into().to_string_lossy().as_bytes()).unwrap(); // .unwrap() is okay here because any nul bytes placed into the actual string should be cleared out by to_string_lossy.
+            // .unwrap() is okay here because any nul bytes placed into the actual string should be cleared out by to_string_lossy.
+            let c_str = CString::new(dir_path.into().to_string_lossy().as_bytes()).unwrap();
             FilePathList(ffi::LoadDirectoryFiles(c_str.as_ptr()))
         }
     }
@@ -122,7 +118,8 @@ impl RaylibHandle {
         A: Into<OsString>,
     {
         unsafe {
-            let dir_c_str = CString::new(dir_path.into().to_string_lossy().as_bytes()).unwrap(); // .unwrap() is okay here because any nul bytes placed into the actual string should be cleared out by to_string_lossy.
+            // .unwrap() is okay here because any nul bytes placed into the actual string should be cleared out by to_string_lossy.
+            let dir_c_str = CString::new(dir_path.into().to_string_lossy().as_bytes()).unwrap();
             let filter_c_str = CString::new(filter.replace("\0", "").as_bytes()).unwrap();
             FilePathList(ffi::LoadDirectoryFilesEx(
                 dir_c_str.as_ptr(),
@@ -134,6 +131,8 @@ impl RaylibHandle {
 
     /// Check if a file has been dropped into window
     pub fn load_dropped_files(&self) -> DroppedFilePathList {
-        unsafe { DroppedFilePathList(ffi::LoadDroppedFiles()) }
+        unsafe {
+            DroppedFilePathList(ffi::LoadDroppedFiles())
+        }
     }
 }

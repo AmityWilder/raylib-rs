@@ -9,3 +9,4 @@ raylib-test/storage.data
 samples/savegame
 showcase/*.png
 showcase/*.raw
+/build

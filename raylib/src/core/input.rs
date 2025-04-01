@@ -89,23 +89,12 @@ impl RaylibHandle {
 
     /// Returns gamepad internal name id.
     #[inline]
-    pub fn get_gamepad_name(&self, gamepad: i32) -> Option<String> {
-        unsafe {
-            let name = ffi::GetGamepadName(gamepad);
-            match name.is_null() {
-                false => match CStr::from_ptr(name).to_str() {
-                    Ok(a) => Some(a.to_owned()),
-                    Err(err) => {
-                        self.trace_log(
-                            TraceLogLevel::LOG_WARNING,
-                            format!("Result of get_gamepad_name was not valid UTF-8; \"{}\". Returning None.",err).as_str(),
-                        );
-                        None
-                    }
-                },
-                true => None,
-            }
+    pub fn get_gamepad_name(&self, gamepad: i32) -> Result<Option<String>, NulError> {
+        let name = unsafe { ffi::GetGamepadName(gamepad) };
+        if !name.is_null() {
+            return Some(unsafe { CStr::from_ptr(name).to_str()?.to_owned() });
         }
+        None
     }
 
     /// Detect if a gamepad button has been pressed once.
@@ -216,18 +205,18 @@ impl RaylibHandle {
 
     /// Sets mouse position.
     #[inline]
-    pub fn set_mouse_position(&mut self, position: impl Into<Vector2>) {
+    pub fn set_mouse_position(&mut self, position: Vector2) {
+        let Vector2 { x, y } = position;
         unsafe {
-            let Vector2 { x, y } = position.into();
             ffi::SetMousePosition(x as i32, y as i32);
         }
     }
 
     /// Sets mouse offset.
     #[inline]
-    pub fn set_mouse_offset(&mut self, offset: impl Into<Vector2>) {
+    pub fn set_mouse_offset(&mut self, offset: Vector2) {
+        let Vector2 { x, y } = offset;
         unsafe {
-            let Vector2 { x, y } = offset.into();
             ffi::SetMouseOffset(x as i32, y as i32);
         }
     }

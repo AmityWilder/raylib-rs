@@ -9,6 +9,29 @@ use crate::{
     ffi,
 };
 
+#[derive(Debug)]
+pub struct CompressionFailError(());
+
+impl std::fmt::Display for CompressionFailError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "could not compress data")
+    }
+}
+
+impl std::error::Error for CompressionFailError {}
+
+pub struct DataBuf {
+    buffer: NonNull<u8>,
+    len: u32,
+}
+
+impl std::ops::Deref for DataBuf {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        std::slice::from_raw_parts(self.buffer.as_ptr(), self.len.get() as usize)
+    }
+}
+
 /// Compress data (DEFLATE algorythm)
 /// ```rust
 /// use raylib::prelude::*;
@@ -16,17 +39,24 @@ use crate::{
 /// let expected: &[u8] = &[1, 5, 0, 250, 255, 49, 49, 49, 49, 49];
 /// assert_eq!(data, expected);
 /// ```
-pub fn compress_data(data: &[u8]) -> Result<&'static [u8], Error> {
+pub fn compress_data(data: &[u8]) -> Result<DataBuf, CompressionFailError> {
+    let data_len = data.len();
+    assert!(data_len <= i32::MAX as usize, "invalid data length");
     let mut out_length: i32 = 0;
     // CompressData doesn't actually modify the data, but the header is wrong
-    let buffer = {
-        unsafe { ffi::CompressData(data.as_ptr() as *mut _, data.len() as i32, &mut out_length) }
+    let buffer = unsafe {
+        ffi::CompressData(data.as_ptr() as *mut _, data_len as i32, &mut out_length)
     };
-    if buffer.is_null() {
-        return Err(error!("could not compress data"));
+
+    if let buffer = NonNull::new(buffer) {
+        assert!(out_length >= 1, "non-null buffer length cannot be zero or negative");
+        Ok(DataBuf {
+            buffer: NonNull::new(buffer),
+            len: out_length as u32,
+        })
+    } else {
+        Err(CompressionFailError(()))
     }
-    let buffer = unsafe { std::slice::from_raw_parts(buffer, out_length as usize) };
-    return Ok(buffer);
 }
 
 /// Decompress data (DEFLATE algorythm)
@@ -37,19 +67,26 @@ pub fn compress_data(data: &[u8]) -> Result<&'static [u8], Error> {
 /// let data = decompress_data(input).unwrap();
 /// assert_eq!(data, expected);
 /// ```
-pub fn decompress_data(data: &[u8]) -> Result<&'static [u8], Error> {
+pub fn decompress_data(data: &[u8]) -> Result<DataBuf, CompressionFailError> {
+    #[cfg(debug_assertions)]
     println!("{:?}", data.len());
 
+    let data_len = data.len();
+    assert!(data_len <= i32::MAX as usize, "invalid data length");
     let mut out_length: i32 = 0;
     // CompressData doesn't actually modify the data, but the header is wrong
     let buffer = {
-        unsafe { ffi::DecompressData(data.as_ptr() as *mut _, data.len() as i32, &mut out_length) }
+        unsafe { ffi::DecompressData(data.as_ptr() as *mut _, data_len as i32, &mut out_length) }
     };
-    if buffer.is_null() {
-        return Err(error!("could not compress data"));
+    if let Some(buffer) = NonNull::new(buffer) {
+        assert!(out_length >= 1, "non-null buffer length cannot be zero or negative");
+        Ok(DataBuf {
+            buffer,
+            len: out_length as u32,
+        })
+    } else {
+        Err(CompressionFailError(()));
     }
-    let buffer = unsafe { std::slice::from_raw_parts(buffer, out_length as usize) };
-    return Ok(buffer);
 }
 
 #[cfg(unix)]

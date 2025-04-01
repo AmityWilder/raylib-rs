@@ -21,12 +21,12 @@ extern "C" {
     fn SetTraceLogCallback(cb: Option<TraceLogCallback>);
 }
 
-type RustTraceLogCallback = fn(TraceLogLevel, &str);
-type RustSaveFileDataCallback = fn(&str, &[u8]) -> bool;
-type RustLoadFileDataCallback = fn(&str) -> Vec<u8>;
-type RustSaveFileTextCallback = fn(&str, &str) -> bool;
-type RustLoadFileTextCallback = fn(&str) -> String;
-type RustAudioStreamCallback = fn(&[u8]);
+type RustTraceLogCallback = FnMut(TraceLogLevel, &str);
+type RustSaveFileDataCallback = FnMut(&str, &[u8]) -> bool;
+type RustLoadFileDataCallback = FnMut(&str) -> Vec<u8>;
+type RustSaveFileTextCallback = FnMut(&str, &str) -> bool;
+type RustLoadFileTextCallback = FnMut(&str) -> String;
+type RustAudioStreamCallback = FnMut(&[u8]);
 
 static TRACE_LOG_CALLBACK: AtomicUsize = AtomicUsize::new(0);
 static SAVE_FILE_DATA_CALLBACK: AtomicUsize = AtomicUsize::new(0);

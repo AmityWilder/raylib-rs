@@ -23,11 +23,11 @@ Permission is granted to anyone to use this software for any purpose, including 
 use std::f32::consts::PI;
 
 /// The type alias used for all easing functions.
-pub type EaseFn = fn(f32, f32, f32, f32) -> f32;
+pub type EaseFn = dyn Fn(f32, f32, f32, f32) -> f32;
 
 /// A manager for a tween on a single `f32` value.
-pub struct Tween {
-    easer: EaseFn,
+pub struct Tween<'a> {
+    easer: &'a EaseFn,
     start_value: f32,
     end_value: f32,
     current_time: f32,
@@ -35,10 +35,10 @@ pub struct Tween {
     completed: bool,
 }
 
-impl Tween {
+impl<'a> Tween<'a> {
     /// Creates a new `Tween` given the easing function, value bounds, and duration.
-    pub fn new(easer: EaseFn, start_value: f32, end_value: f32, duration: f32) -> Tween {
-        Tween {
+    pub fn new(easer: &'a EaseFn, start_value: f32, end_value: f32, duration: f32) -> Self {
+        Self {
             easer,
             start_value,
             end_value,
