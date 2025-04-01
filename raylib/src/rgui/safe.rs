@@ -506,13 +506,13 @@ pub trait RaylibDrawGui {
     fn gui_list_view_ex(
         &mut self,
         bounds: impl Into<ffi::Rectangle>,
-        text: impl Iterator<Item = impl AsRef<str>>,
+        text: impl IntoIterator<Item: AsRef<str>>,
         focus: &mut i32,
         scroll_index: &mut i32,
         active: &mut i32,
-    ) -> i32 {
+    ) {
         // We need to keep track of all CStr buffers.
-        let buffer: Box<[Box<CStr>]> = text
+        let buffer: Box<[Box<CStr>]> = text.into_iter()
             .map(|s| CString::new(s.as_ref()).unwrap().into_boxed_c_str())
             .collect();
 
@@ -527,7 +527,7 @@ pub trait RaylibDrawGui {
                 focus,
                 scroll_index,
                 active,
-            )
+            );
         }
     }
     /// Message Box control, displays a message

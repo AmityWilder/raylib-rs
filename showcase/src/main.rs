@@ -17,243 +17,240 @@ fn main() {
     let title = "Showcase";
     let screen_width = 800;
     let screen_height = 640;
-    let (mut rl, thread) = raylib::init()
-        .size(screen_width, screen_height)
-        .title(title)
+    let (mut rl, thread) = raylib::init(screen_width, screen_height, title)
         .resizable()
         .vsync()
         .msaa_4x()
-        .build();
+        .build()
+        .unwrap();
 
     rl.set_exit_key(None);
 
-    let samples: Vec<(&std::ffi::CStr, Sample)> = vec![
+    let samples: Vec<(&str, Sample)> = vec![
         (
-            rstr!("raygui - controls test suite"),
+            "raygui - controls test suite",
             example::controls_test_suite::controls_test_suite::run,
         ),
         (
-            rstr!("raygui - image exporter"),
+            "raygui - image exporter",
             example::image_exporter::image_exporter::run,
         ),
         (
-            rstr!("raygui - portable window"),
+            "raygui - portable window",
             example::portable_window::portable_window::run,
         ),
         (
-            rstr!("raygui - GuiScrollPanel()"),
+            "raygui - GuiScrollPanel()",
             example::scroll_panel::gui_scroll_panel::run,
         ),
         (
-            rstr!("raylib [audio] example - music playing (streaming)"),
+            "raylib [audio] example - music playing (streaming)",
             example::audio::audio_music_stream::run,
         ),
         (
-            rstr!("raylib [audio] example - module playing (streaming)"),
+            "raylib [audio] example - module playing (streaming)",
             example::audio::audio_module_playing::run,
         ),
         (
-            rstr!("raylib [audio] example - Multichannel sound playing"),
+            "raylib [audio] example - Multichannel sound playing",
             example::audio::audio_multichannel_sound::run,
         ),
         (
-            rstr!("raylib [audio] example - raw audio streaming"),
+            "raylib [audio] example - raw audio streaming",
             example::audio::audio_raw_stream::run,
         ),
         (
-            rstr!("raylib [audio] example - sound loading and playing"),
+            "raylib [audio] example - sound loading and playing",
             example::audio::audio_sound_loading::run,
         ),
         (
-            rstr!("raylib [core] example - Camera"),
+            "raylib [core] example - Camera",
             example::core::core_2d_camera::run,
         ),
         (
-            rstr!("raylib [core] example - Camera Platformer"),
+            "raylib [core] example - Camera Platformer",
             example::core::core_2d_camera_platformer::run,
         ),
         (
-            rstr!("raylib [core] example - 3d camera first person"),
+            "raylib [core] example - 3d camera first person",
             example::core::core_3d_camera_first_person::run,
         ),
         (
-            rstr!("raylib [core] example - 3d camera free"),
+            "raylib [core] example - 3d camera free",
             example::core::core_3d_camera_free::run,
         ),
         (
-            rstr!("raylib [core] example - 3d camera mode"),
+            "raylib [core] example - 3d camera mode",
             example::core::core_3d_camera_mode::run,
         ),
         (
-            rstr!("raylib [core] example - 3d picking"),
+            "raylib [core] example - 3d picking",
             example::core::core_3d_picking::run,
         ),
         (
-            rstr!("raylib [core] example - basic window"),
+            "raylib [core] example - basic window",
             example::core::core_basic_window::run,
         ),
         #[cfg(target_os = "windows")]
         (
-            rstr!("raylib [core] example - custom logging"),
+            "raylib [core] example - custom logging",
             example::core::core_custom_logging::run,
         ),
         (
-            rstr!("raylib [core] example - drop files"),
+            "raylib [core] example - drop files",
             example::core::core_drop_files::run,
         ),
         (
-            rstr!("raylib [core] example - gamepad input"),
+            "raylib [core] example - gamepad input",
             example::core::core_input_gamepad::run,
         ),
         (
-            rstr!("raylib [core] example - input gestures"),
+            "raylib [core] example - input gestures",
             example::core::core_input_gestures::run,
         ),
         (
-            rstr!("raylib [core] example - keyboard input"),
+            "raylib [core] example - keyboard input",
             example::core::core_input_keys::run,
         ),
         (
-            rstr!("raylib [core] example - input mouse wheel"),
+            "raylib [core] example - input mouse wheel",
             example::core::core_input_mouse_wheel::run,
         ),
         (
-            rstr!("raylib [core] example - mouse input"),
+            "raylib [core] example - mouse input",
             example::core::core_input_mouse::run,
         ),
         (
-            rstr!("raylib [core] example - input multitouch"),
+            "raylib [core] example - input multitouch",
             example::core::core_input_multitouch::run,
         ),
         (
-            rstr!("raylib [core] example - generate random values"),
+            "raylib [core] example - generate random values",
             example::core::core_random_values::run,
         ),
         (
-            rstr!("raylib [core] example - window scale letterbox"),
+            "raylib [core] example - window scale letterbox",
             example::core::core_window_letterbox::run,
         ),
         (
-            rstr!("raylib [core] example - core world screen"),
+            "raylib [core] example - core world screen",
             example::core::core_world_screen::run,
         ),
         (
-            rstr!("raylib [core] example - scissor test"),
+            "raylib [core] example - scissor test",
             example::core::core_scissor_test::run,
         ),
         // VR is Buggy AF. Take a look at it
         // (
-        //     rstr!("raylib [core] example - vr simulator"),
+        //     "raylib [core] example - vr simulator",
         //     example::core::core_vr_simulator::run,
         // ),
         (
-            rstr!("raylib [models] example - cubesmap loading and drawing"),
+            "raylib [models] example - cubesmap loading and drawing",
             example::models::models_cubicmap::run,
         ),
         // (
-        //     rstr!("raylib [models] example - pbr material"),
+        //     "raylib [models] example - pbr material",
         //     example::models::models_material_pbr::run,
         // ),
         (
-            rstr!("raylib [models] example - drawing billboards"),
+            "raylib [models] example - drawing billboards",
             example::models::models_billboard::run,
         ),
         (
-            rstr!("raylib [models] example - box collisions"),
+            "raylib [models] example - box collisions",
             example::models::models_box_collisions::run,
         ),
         (
-            rstr!("raylib [models] example - cubesmap loading and drawing"),
+            "raylib [models] example - cubesmap loading and drawing",
             example::models::models_cubicmap::run,
         ),
         (
-            rstr!("raylib [models] example - model animation"),
+            "raylib [models] example - model animation",
             example::models::models_animation::run,
         ),
         (
-            rstr!("raylib [models] example - first person maze"),
+            "raylib [models] example - first person maze",
             example::models::models_first_person_maze::run,
         ),
         (
-            rstr!("raylib [models] example - geometric shapes"),
+            "raylib [models] example - geometric shapes",
             example::models::models_geometric_shapes::run,
         ),
         (
-            rstr!("raylib [models] example - heightmap loading and drawing"),
+            "raylib [models] example - heightmap loading and drawing",
             example::models::models_heightmap::run,
         ),
         (
-            rstr!("raylib [models] example - models loading"),
+            "raylib [models] example - models loading",
             example::models::models_loading::run,
         ),
         (
-            rstr!("raylib [models] example - mesh generation"),
+            "raylib [models] example - mesh generation",
             example::models::models_mesh_generation::run,
         ),
         (
-            rstr!("raylib [models] example - mesh picking"),
+            "raylib [models] example - mesh picking",
             example::models::models_mesh_picking::run,
         ),
         (
-            rstr!("raylib [models] example - orthographic projection"),
+            "raylib [models] example - orthographic projection",
             example::models::models_orthographic_projection::run,
         ),
         (
-            rstr!(
-                "raylib [models] example - rlgl module usage with push/pop matrix transformations"
-            ),
+            "raylib [models] example - rlgl module usage with push/pop matrix transformations",
             example::models::models_rlgl_solar_system::run,
         ),
         // (
-        //     rstr!("raylib [models] example - skybox loading and drawing"),
+        //     "raylib [models] example - skybox loading and drawing",
         //     example::models::models_skybox::run,
         // ),
         (
-            rstr!("raylib [models] example - waving cubes"),
+            "raylib [models] example - waving cubes",
             example::models::models_waving_cubes::run,
         ),
         (
-            rstr!("raylib [models] example - plane rotations (yaw, pitch, roll)"),
+            "raylib [models] example - plane rotations (yaw, pitch, roll)",
             example::models::models_yaw_pitch_roll::run,
         ),
         (
-            rstr!("raylib [textures] example - bunnymark"),
+            "raylib [textures] example - bunnymark",
             example::textures::textures_bunnymark::run,
         ),
         (
-            rstr!("raylib [shaders] example - basic lighting"),
+            "raylib [shaders] example - basic lighting",
             example::shaders::shaders_basic_lighting::run,
         ),
         (
-            rstr!("raylib [shaders] example - custom uniform variable"),
+            "raylib [shaders] example - custom uniform variable",
             example::shaders::shaders_custom_uniform::run,
         ),
         (
-            rstr!("raylib [shaders] example - Sieve of Eratosthenes"),
+            "raylib [shaders] example - Sieve of Eratosthenes",
             example::shaders::shaders_eratosthenes::run,
         ),
         (
-            rstr!("raylib [shaders] example - fog"),
+            "raylib [shaders] example - fog",
             example::shaders::shaders_fog::run,
         ),
         (
-            rstr!("raylib [shaders] example - julia sets"),
+            "raylib [shaders] example - julia sets",
             example::shaders::shaders_julia_set::run,
         ),
         (
-            rstr!("raylib [shaders] example - postprocessing shader"),
+            "raylib [shaders] example - postprocessing shader",
             example::shaders::shaders_postprocessing::run,
         ),
         (
-            rstr!("raylib [texture] example - texture rectangle"),
+            "raylib [texture] example - texture rectangle",
             example::textures::textures_rectangle::run,
         ),
         (
-            rstr!("raylib [textures] example - mouse painting"),
+            "raylib [textures] example - mouse painting",
             example::textures::textures_mouse_painting::run,
         ),
         (
-            rstr!("rlgl standalone"),
+            "rlgl standalone",
             example::others::rlgl_standalone::run,
         ),
     ];
@@ -269,24 +266,23 @@ fn main() {
         match &mut sample {
             None => {
                 let mut to_run = None;
-                {
-                    let mut d = rl.begin_drawing(&thread);
+                rl.draw(&thread, |d| {
                     d.clear_background(Color::WHITE);
 
                     let list: Vec<_> = samples.iter().map(|(s, _)| *s).collect();
 
-                    list_view_active = d.gui_list_view_ex(
-                        rrect(100.0, y_margin as f32, 600 as f32, box_length as f32),
+                    d.gui_list_view_ex(
+                        rrect(100.0, y_margin as f32, 600.0, box_length as f32),
                         list.as_slice(),
                         &mut list_view_focus,
                         &mut list_view_scroll_index,
-                        list_view_active,
+                        &mut list_view_active,
                     );
 
                     if list_view_active >= 0 {
                         to_run.replace(samples[list_view_active as usize].1);
                     }
-                }
+                });
 
                 match to_run {
                     Some(run) => sample = Some(run(&mut rl, &thread)),
