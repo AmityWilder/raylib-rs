@@ -1,4 +1,4 @@
-/**********************************************************************************************
+/*!********************************************************************************************
 *
 *   Physac v1.1 - 2D Physics library for videogames
 *
@@ -82,176 +82,192 @@ use crate::prelude::Vector2;
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
-pub const PHYSAC_MAX_BODIES:      usize = 64;
-pub const PHYSAC_MAX_MANIFOLDS:   usize = 4096;
-pub const PHYSAC_MAX_VERTICES:    usize = 24;
-pub const PHYSAC_CIRCLE_VERTICES: usize = 24;
+pub const PHYSAC_MAX_BODIES:      u32 = 64;
+pub const PHYSAC_MAX_MANIFOLDS:   u32 = 4096;
+pub const PHYSAC_MAX_VERTICES:    u32 = 24;
+pub const PHYSAC_CIRCLE_VERTICES: u32 = 24;
 
-pub const PHYSAC_FIXED_TIME:             f32   = 1.0/60.0;
-pub const PHYSAC_COLLISION_ITERATIONS:   usize = 20;
-pub const PHYSAC_PENETRATION_ALLOWANCE:  f32   = 0.05;
-pub const PHYSAC_PENETRATION_CORRECTION: f32   = 0.4;
+pub const PHYSAC_FIXED_TIME:             f32 = 1.0/60.0;
+pub const PHYSAC_COLLISION_ITERATIONS:   u32 = 20;
+pub const PHYSAC_PENETRATION_ALLOWANCE:  f32 = 0.05;
+pub const PHYSAC_PENETRATION_CORRECTION: f32 = 0.4;
 
 //----------------------------------------------------------------------------------
 // Types and Structures Definition
 //----------------------------------------------------------------------------------
-pub enum PhysicsShapeType { Circle, Polygon }
-pub use PhysicsShapeType::{Circle as PHYSICS_CIRCLE, Polygon as PHYSICS_POLYGON};
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PhysicsShapeType {
+    #[default]
+    Circle,
+    Polygon,
+}
+pub use PhysicsShapeType::{
+    Circle as PHYSICS_CIRCLE,
+    Polygon as PHYSICS_POLYGON,
+};
 
-// Previously defined to be used in PhysicsShape struct as circular dependencies
-pub struct PhysicsBody(*mut PhysicsBodyData);
+/// Previously defined to be used in PhysicsShape struct as circular dependencies
+#[derive(Debug, Clone, Default)]
+pub struct PhysicsBody(Weak<RwLock<PhysicsBodyData>>);
+impl std::ops::Deref for PhysicsBody {
+    type Target = Weak<RwLock<PhysicsBodyData>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl std::ops::DerefMut for PhysicsBody {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 // Mat2 type (used for polygon shape rotation matrix)
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Mat2 {
-    m00: f32,
-    m01: f32,
-    m10: f32,
-    m11: f32,
+    pub m00: f32,
+    pub m01: f32,
+    pub m10: f32,
+    pub m11: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct PolygonData {
     /// Current used vertex and normals count
-    vertex_count: u32,
+    pub vertex_count: u32,
 
     /// Polygon vertex positions vectors
-    positions: [Vector2; PHYSAC_MAX_VERTICES],
+    pub positions: [Vector2; PHYSAC_MAX_VERTICES as usize],
 
     /// Polygon vertex normals vectors
-    normals: [Vector2; PHYSAC_MAX_VERTICES],
+    pub normals: [Vector2; PHYSAC_MAX_VERTICES as usize],
 }
 
+#[derive(Debug, Default)]
 pub struct PhysicsShape {
     /// Physics shape type (circle or polygon)
-    kind: PhysicsShapeType,
+    pub kind: PhysicsShapeType,
 
     /// Shape physics body reference
-    body: PhysicsBody,
+    pub body: PhysicsBody,
 
     /// Circle shape radius (used for circle shapes)
-    radius: f32,
+    pub radius: f32,
 
     /// Vertices transform matrix 2x2
-    transform: Mat2,
+    pub transform: Mat2,
 
     /// Polygon shape vertices position and normals data (just used for polygon shapes)
-    vertex_data: PolygonData,
+    pub vertex_data: PolygonData,
 }
 
+#[derive(Debug, Default)]
 pub struct PhysicsBodyData {
     /// Reference unique identifier
-    id: u32,
+    pub id: u32,
 
     /// Enabled dynamics state (collisions are calculated anyway)
-    enabled: bool,
+    pub enabled: bool,
 
     /// Physics body shape pivot
-    position: Vector2,
+    pub position: Vector2,
 
     /// Current linear velocity applied to position
-    velocity: Vector2,
+    pub velocity: Vector2,
 
     /// Current linear force (reset to 0 every step)
-    force: Vector2,
+    pub force: Vector2,
 
     /// Current angular velocity applied to orient
-    angularVelocity: f32,
+    pub angular_velocity: f32,
 
     /// Current angular force (reset to 0 every step)
-    torque: f32,
+    pub torque: f32,
 
     /// Rotation in radians
-    orient: f32,
+    pub orient: f32,
 
     /// Moment of inertia
-    inertia: f32,
+    pub inertia: f32,
 
     /// Inverse value of inertia
-    inverseInertia: f32,
+    pub inverse_inertia: f32,
 
     /// Physics body mass
-    mass: f32,
+    pub mass: f32,
 
     /// Inverse value of mass
-    inverseMass: f32,
+    pub inverse_mass: f32,
 
     /// Friction when the body has not movement (0 to 1)
-    staticFriction: f32,
+    pub static_friction: f32,
 
     /// Friction when the body has movement (0 to 1)
-    dynamicFriction: f32,
+    pub dynamic_friction: f32,
 
     /// Restitution coefficient of the body (0 to 1)
-    restitution: f32,
+    pub restitution: f32,
 
     /// Apply gravity force to dynamics
-    useGravity: bool,
+    pub use_gravity: bool,
 
     /// Physics grounded on other body state
-    isGrounded: bool,
+    pub is_grounded: bool,
 
     /// Physics rotation constraint
-    freezeOrient: bool,
+    pub freeze_orient: bool,
 
     /// Physics body shape information (type, radius, vertices, normals)
-    shape: PhysicsShape,
+    pub shape: PhysicsShape,
 }
 
+#[derive(Debug)]
 pub struct PhysicsManifoldData {
     /// Reference unique identifier
-    id: u32,
+    pub id: u32,
 
     /// Manifold first physics body reference
-    bodyA: PhysicsBody,
+    pub body_a: PhysicsBody,
 
     /// Manifold second physics body reference
-    bodyB: PhysicsBody,
+    pub body_b: PhysicsBody,
 
     /// Depth of penetration from collision
-    penetration: f32,
+    pub penetration: f32,
 
     /// Normal direction vector from 'a' to 'b'
-    normal: Vector2,
+    pub normal: Vector2,
 
     /// Points of contact during collision
-    contacts: [Vector2; 2],
+    pub contacts: [Vector2; 2],
 
     /// Current collision number of contacts
-    contactsCount: u32,
+    pub contacts_count: u32,
 
     /// Mixed restitution during collision
-    restitution: f32,
+    pub restitution: f32,
 
     /// Mixed dynamic friction during collision
-    dynamic_friction: f32,
+    pub dynamic_friction: f32,
 
     /// Mixed static friction during collision
-    static_friction: f32,
+    pub static_friction: f32,
 }
 
-pub struct PhysicsManifold(*mut PhysicsManifoldData);
+#[derive(Debug, Clone, Default)]
+pub struct PhysicsManifold(Weak<RwLock<PhysicsManifoldData>>);
+impl std::ops::Deref for PhysicsManifold {
+    type Target = Weak<RwLock<PhysicsManifoldData>>;
 
-// //----------------------------------------------------------------------------------
-// // Module Functions Declaration
-// //----------------------------------------------------------------------------------
-// pub fn void InitPhysics(void);                                                                           // Initializes physics values, pointers and creates physics loop thread
-// pub fn void RunPhysicsStep(void);                                                                        // Run physics step, to be used if PHYSICS_NO_THREADS is set in your main loop
-// pub fn void SetPhysicsTimeStep(double delta);                                                            // Sets physics fixed time step in milliseconds. 1.666666 by default
-// pub fn bool IsPhysicsEnabled(void);                                                                      // Returns true if physics thread is currently enabled
-// pub fn void SetPhysicsGravity(float x, float y);                                                         // Sets physics global gravity force
-// pub fn PhysicsBody CreatePhysicsBodyCircle(Vector2 pos, float radius, float density);                    // Creates a new circle physics body with generic parameters
-// pub fn PhysicsBody CreatePhysicsBodyRectangle(Vector2 pos, float width, float height, float density);    // Creates a new rectangle physics body with generic parameters
-// pub fn PhysicsBody CreatePhysicsBodyPolygon(Vector2 pos, float radius, int sides, float density);        // Creates a new polygon physics body with generic parameters
-// pub fn void PhysicsAddForce(PhysicsBody body, Vector2 force);                                            // Adds a force to a physics body
-// pub fn void PhysicsAddTorque(PhysicsBody body, float amount);                                            // Adds an angular force to a physics body
-// pub fn void PhysicsShatter(PhysicsBody body, Vector2 position, float force);                             // Shatters a polygon shape physics body to little physics bodies with explosion force
-// pub fn int GetPhysicsBodiesCount(void);                                                                  // Returns the current amount of created physics bodies
-// pub fn PhysicsBody GetPhysicsBody(int index);                                                            // Returns a physics body of the bodies pool at a specific index
-// pub fn int GetPhysicsShapeType(int index);                                                               // Returns the physics body shape type (PHYSICS_CIRCLE or PHYSICS_POLYGON)
-// pub fn int GetPhysicsShapeVerticesCount(int index);                                                      // Returns the amount of vertices of a physics body shape
-// pub fn Vector2 GetPhysicsShapeVertex(PhysicsBody body, int vertex);                                      // Returns transformed position of a body shape (body position + vertex transformed position)
-// pub fn void SetPhysicsBodyRotation(PhysicsBody body, float radians);                                     // Sets physics body shape transform based on radians parameter
-// pub fn void DestroyPhysicsBody(PhysicsBody body);                                                        // Unitializes and destroy a physics body
-// pub fn void ClosePhysics(void);                                                                          // Unitializes physics pointers and closes physics loop thread
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl std::ops::DerefMut for PhysicsManifold {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 /***********************************************************************************
 *
@@ -259,9 +275,9 @@ pub struct PhysicsManifold(*mut PhysicsManifoldData);
 *
 ************************************************************************************/
 
-use std::{ffi::c_void, mem::MaybeUninit, sync::atomic::{self, AtomicBool}};
-#[cfg(not(feature = "physac-no_threads"))]
-use std::thread;
+use std::{ffi::c_void, sync::{atomic::{self, AtomicBool}, Arc, LazyLock, RwLock, Weak}};
+// #[cfg(not(feature = "physac_no_threads"))]
+// use std::thread;
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
@@ -271,7 +287,7 @@ pub const PHYSAC_K: f32 = 1.0/3.0;
 //----------------------------------------------------------------------------------
 // Global Variables Definition
 //----------------------------------------------------------------------------------
-// #[cfg(not(feature = "physac-no_threads"))]
+// #[cfg(not(feature = "physac_no_threads"))]
 // /// Physics thread id
 // static pthread_t physicsThreadId;
 
@@ -299,91 +315,44 @@ static mut STEPS_COUNT: u32 = 0;
 /// Physics world gravity force
 static mut GRAVITY_FORCE: Vector2 = Vector2::new(0.0, 9.81);
 /// Physics bodies pointers array
-static mut BODIES: [Option<PhysicsBody>; PHYSAC_MAX_BODIES] = [const { None }; PHYSAC_MAX_BODIES];
+static BODIES: LazyLock<Arc<RwLock<[Option<Arc<RwLock<PhysicsBodyData>>>; PHYSAC_MAX_BODIES as usize]>>>
+    = LazyLock::new(|| Arc::new(RwLock::new([const { None }; PHYSAC_MAX_BODIES as usize])));
 /// Physics world current bodies counter
 static mut PHYSICS_BODIES_COUNT: u32 = 0;
 /// Physics bodies pointers array
-static mut CONTACTS: [Option<PhysicsManifold>; PHYSAC_MAX_MANIFOLDS] = [const { None }; PHYSAC_MAX_MANIFOLDS];
+static CONTACTS: LazyLock<Arc<RwLock<[Option<Arc<RwLock<PhysicsManifoldData>>>; PHYSAC_MAX_MANIFOLDS as usize]>>>
+    = LazyLock::new(|| Arc::new(RwLock::new([const { None }; PHYSAC_MAX_MANIFOLDS as usize])));
 /// Physics world current manifolds counter
 static mut PHYSICS_MANIFOLDS_COUNT: u32 = 0;
 
 //----------------------------------------------------------------------------------
-// Module Internal Functions Declaration
-//----------------------------------------------------------------------------------
-// static int FindAvailableBodyIndex();                                                                        // Finds a valid index for a new physics body initialization
-// static PolygonData CreateRandomPolygon(float radius, int sides);                                            // Creates a random polygon shape with max vertex distance from polygon pivot
-// static PolygonData CreateRectanglePolygon(Vector2 pos, Vector2 size);                                       // Creates a rectangle polygon shape based on a min and max positions
-// static void *PhysicsLoop(void *arg);                                                                        // Physics loop thread function
-// static void PhysicsStep(void);                                                                              // Physics steps calculations (dynamics, collisions and position corrections)
-// static int FindAvailableManifoldIndex();                                                                    // Finds a valid index for a new manifold initialization
-// static PhysicsManifold CreatePhysicsManifold(PhysicsBody a, PhysicsBody b);                                 // Creates a new physics manifold to solve collision
-// static void DestroyPhysicsManifold(PhysicsManifold manifold);                                               // Unitializes and destroys a physics manifold
-// static void SolvePhysicsManifold(PhysicsManifold manifold);                                                 // Solves a created physics manifold between two physics bodies
-// static void SolveCircleToCircle(PhysicsManifold manifold);                                                  // Solves collision between two circle shape physics bodies
-// static void SolveCircleToPolygon(PhysicsManifold manifold);                                                 // Solves collision between a circle to a polygon shape physics bodies
-// static void SolvePolygonToCircle(PhysicsManifold manifold);                                                 // Solves collision between a polygon to a circle shape physics bodies
-// static void SolveDifferentShapes(PhysicsManifold manifold, PhysicsBody bodyA, PhysicsBody bodyB);           // Solve collision between two different types of shapes
-// static void SolvePolygonToPolygon(PhysicsManifold manifold);                                                // Solves collision between two polygons shape physics bodies
-// static void IntegratePhysicsForces(PhysicsBody body);                                                       // Integrates physics forces into velocity
-// static void InitializePhysicsManifolds(PhysicsManifold manifold);                                           // Initializes physics manifolds to solve collisions
-// static void IntegratePhysicsImpulses(PhysicsManifold manifold);                                             // Integrates physics collisions impulses to solve collisions
-// static void IntegratePhysicsVelocity(PhysicsBody body);                                                     // Integrates physics velocity into position and forces
-// static void CorrectPhysicsPositions(PhysicsManifold manifold);                                              // Corrects physics bodies positions based on manifolds collision information
-// static float FindAxisLeastPenetration(int *faceIndex, PhysicsShape shapeA, PhysicsShape shapeB);            // Finds polygon shapes axis least penetration
-// static void FindIncidentFace(Vector2 *v0, Vector2 *v1, PhysicsShape ref, PhysicsShape inc, int index);      // Finds two polygon shapes incident face
-// static int Clip(Vector2 normal, float clip, Vector2 *faceA, Vector2 *faceB);                                // Calculates clipping based on a normal and two faces
-// static bool BiasGreaterThan(float valueA, float valueB);                                                    // Check if values are between bias range
-// static Vector2 TriangleBarycenter(Vector2 v1, Vector2 v2, Vector2 v3);                                      // Returns the barycenter of a triangle given by 3 points
-
-// static void InitTimer(void);                                                                                // Initializes hi-resolution MONOTONIC timer
-// static uint64_t GetTimeCount(void);                                                                         // Get hi-res MONOTONIC time measure in mseconds
-// static double GetCurrTime(void);                                                                         // Get current time measure in milliseconds
-
-// // Math functions
-// static Vector2 MathCross(float value, Vector2 vector);                                                      // Returns the cross product of a vector and a value
-// static float MathCrossVector2(Vector2 v1, Vector2 v2);                                                      // Returns the cross product of two vectors
-// static float MathLenSqr(Vector2 vector);                                                                    // Returns the len square root of a vector
-// static float MathDot(Vector2 v1, Vector2 v2);                                                               // Returns the dot product of two vectors
-// static inline float DistSqr(Vector2 v1, Vector2 v2);                                                        // Returns the square root of distance between two vectors
-// static void MathNormalize(Vector2 *vector);                                                                 // Returns the normalized values of a vector
-// #if defined(PHYSAC_STANDALONE)
-// static Vector2 Vector2Add(Vector2 v1, Vector2 v2);                                                          // Returns the sum of two given vectors
-// static Vector2 Vector2Subtract(Vector2 v1, Vector2 v2);                                                     // Returns the subtract of two given vectors
-// #endif
-
-// static Mat2 Mat2Radians(float radians);                                                                     // Creates a matrix 2x2 from a given radians value
-// static void Mat2Set(Mat2 *matrix, float radians);                                                           // Set values from radians to a created matrix 2x2
-// static inline Mat2 Mat2Transpose(Mat2 matrix);                                                              // Returns the transpose of a given matrix 2x2
-// static inline Vector2 Mat2MultiplyVector2(Mat2 matrix, Vector2 vector);                                     // Multiplies a vector by a matrix 2x2
-
-//----------------------------------------------------------------------------------
 // Module Functions Definition
 //----------------------------------------------------------------------------------
-// Initializes physics values, pointers and creates physics loop thread
+/// Initializes physics values, pointers and creates physics loop thread
 pub fn init_physics() {
-    todo!()
-    // #if !defined(PHYSAC_NO_THREADS)
-    //     // NOTE: if defined, user will need to create a thread for PhysicsThread function manually
-    //     // Create physics thread using POSIXS thread libraries
-    //     pthread_create(&physicsThreadId, NULL, &PhysicsLoop, NULL);
-    // #endif
+    // #[cfg(not(feature = "physac_no_threads"))]
+    // // NOTE: if defined, user will need to create a thread for PhysicsThread function manually
+    // // Create physics thread using POSIXS thread libraries
+    // pthread_create(&physicsThreadId, NULL, &PhysicsLoop, NULL);
 
-    // // Initialize high resolution timer
-    // InitTimer();
+    // Initialize high resolution timer
+    init_timer();
 
-    // #if defined(PHYSAC_DEBUG)
-    //     printf("[PHYSAC] physics module initialized successfully\n");
-    // #endif
+    if cfg!(feature = "physac_debug") {
+        println!("[PHYSAC] physics module initialized successfully");
+    }
 
-    // accumulator = 0.0;
+    unsafe {
+        ACCUMULATOR = 0.0;
+    }
 }
 
-// Returns true if physics thread is currently enabled
+/// Returns true if physics thread is currently enabled
 pub fn is_physics_enabled() -> bool {
     PHYSICS_THREAD_ENABLED.load(atomic::Ordering::Relaxed)
 }
 
-// Sets physics global gravity force
+/// Sets physics global gravity force
 pub fn set_physics_gravity(x: f32, y: f32) {
     unsafe {
         GRAVITY_FORCE.x = x;
@@ -391,7 +360,7 @@ pub fn set_physics_gravity(x: f32, y: f32) {
     }
 }
 
-// Creates a new circle physics body with generic parameters
+/// Creates a new circle physics body with generic parameters
 pub fn create_physics_body_circle(pos: Vector2, radius: f32, density: f32) -> PhysicsBody {
     todo!()
     // PhysicsBody newBody = (PhysicsBody)PHYSAC_MALLOC(sizeof(PhysicsBodyData));
@@ -442,7 +411,7 @@ pub fn create_physics_body_circle(pos: Vector2, radius: f32, density: f32) -> Ph
     // return newBody;
 }
 
-// Creates a new rectangle physics body with generic parameters
+/// Creates a new rectangle physics body with generic parameters
 pub fn create_physics_body_rectangle(pos: Vector2, width: f32, height: f32, density: f32) -> PhysicsBody {
     todo!()
     // PhysicsBody newBody = (PhysicsBody)PHYSAC_MALLOC(sizeof(PhysicsBodyData));
@@ -530,7 +499,7 @@ pub fn create_physics_body_rectangle(pos: Vector2, width: f32, height: f32, dens
     // return newBody;
 }
 
-// Creates a new polygon physics body with generic parameters
+/// Creates a new polygon physics body with generic parameters
 pub fn create_physics_body_polygon(pos: Vector2, radius: f32, sides: i32, density: f32) -> PhysicsBody {
     todo!()
     // PhysicsBody newBody = (PhysicsBody)PHYSAC_MALLOC(sizeof(PhysicsBodyData));
@@ -617,22 +586,26 @@ pub fn create_physics_body_polygon(pos: Vector2, radius: f32, sides: i32, densit
     // return newBody;
 }
 
-// Adds a force to a physics body
-pub fn physics_add_force(body: PhysicsBody, force: Vector2) {
-    todo!()
-    // if (body != NULL)
-    //     body->force = Vector2Add(body->force, force);
+impl PhysicsBody {
+    /// Adds a force to a physics body
+    pub fn add_force(&mut self, force: Vector2) {
+        if let Some(body) = self.upgrade() {
+            let mut body = body.write().unwrap();
+            body.force = body.force + force;
+        }
+    }
+
+    /// Adds an angular force to a physics body
+    pub fn add_torque(&mut self, amount: f32) {
+        if let Some(body) = self.upgrade() {
+            let mut body = body.write().unwrap();
+            body.torque += amount;
+        }
+    }
 }
 
-// Adds an angular force to a physics body
-pub fn physics_add_torque(body: PhysicsBody, amount: f32) {
-    todo!()
-    // if (body != NULL)
-    //     body->torque += amount;
-}
-
-// Shatters a polygon shape physics body to little physics bodies with explosion force
-pub fn physics_shatter(body: PhysicsBody, position: Vector2, force: f32) {
+/// Shatters a polygon shape physics body to little physics bodies with explosion force
+pub fn physics_shatter(body: &mut PhysicsBodyData, position: Vector2, force: f32) {
     todo!()
     // if (body != NULL)
     // {
@@ -773,55 +746,56 @@ pub fn physics_shatter(body: PhysicsBody, position: Vector2, force: f32) {
     // #endif
 }
 
-// Returns the current amount of created physics bodies
+/// Returns the current amount of created physics bodies
 pub fn get_physics_bodies_count() -> u32 {
     unsafe { PHYSICS_BODIES_COUNT }
 }
 
-// Returns a physics body of the bodies pool at a specific index
-pub fn get_physics_body(index: i32) -> PhysicsBody {
-    todo!()
-    // if (index < physicsBodiesCount)
-    // {
-    //     if (bodies[index] == NULL)
-    //     {
-    //         #if defined(PHYSAC_DEBUG)
-    //             printf("[PHYSAC] error when trying to get a null reference physics body");
-    //         #endif
-    //     }
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         printf("[PHYSAC] physics body index is out of bounds");
-    // #endif
+/// Returns a physics body of the bodies pool at a specific index
+///
+/// # Panics
+///
+/// May panic if the index is out of bounds.
+pub fn get_physics_body(index: u32) -> Option<PhysicsBody> {
+    let bodies = BODIES.read().unwrap();
 
-    // return bodies[index];
+    if index < unsafe { PHYSICS_BODIES_COUNT } {
+        if bodies[index as usize].is_none() {
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] error when trying to get a null reference physics body");
+        }
+    } else {
+        #[cfg(feature = "physac_debug")]
+        println!("[PHYSAC] physics body index is out of bounds");
+    }
+
+    bodies[index as usize]
+        .as_ref()
+        .map(|body| PhysicsBody(Arc::downgrade(body)))
 }
 
-// Returns the physics body shape type (PHYSICS_CIRCLE or PHYSICS_POLYGON)
-pub fn get_physics_shape_type(index: i32) -> i32 {
-    todo!()
-    // int result = -1;
+/// Returns the physics body shape type (PHYSICS_CIRCLE or PHYSICS_POLYGON)
+pub fn get_physics_shape_type(index: u32) -> Option<PhysicsShapeType> {
+    let mut result = None;
+    let bodies = BODIES.read().unwrap();
 
-    // if (index < physicsBodiesCount)
-    // {
-    //     if (bodies[index] != NULL)
-    //         result = bodies[index]->shape.type;
+    if index < unsafe { PHYSICS_BODIES_COUNT } {
+        if let Some(body) = bodies[index as usize].as_ref() {
+            let body = body.read().unwrap();
+            result = Some(body.shape.kind);
+        } else {
+            #[cfg(feature = "physac_debug")]
+            printf("[PHYSAC] error when trying to get a null reference physics body");
+        }
+    } else {
+        #[cfg(feature = "physac_debug")]
+        printf("[PHYSAC] physics body index is out of bounds");
+    }
 
-    //     #if defined(PHYSAC_DEBUG)
-    //         else
-    //             printf("[PHYSAC] error when trying to get a null reference physics body");
-    //     #endif
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         printf("[PHYSAC] physics body index is out of bounds");
-    // #endif
-
-    // return result;
+    result
 }
 
-// Returns the amount of vertices of a physics body shape
+/// Returns the amount of vertices of a physics body shape
 pub fn get_physics_shape_vertices_count(index: i32) -> i32 {
     todo!()
     // int result = 0;
@@ -850,8 +824,8 @@ pub fn get_physics_shape_vertices_count(index: i32) -> i32 {
     // return result;
 }
 
-// Returns transformed position of a body shape (body position + vertex transformed position)
-pub fn get_physics_shape_vertex(body: PhysicsBody, vertex: i32) -> Vector2 {
+/// Returns transformed position of a body shape (body position + vertex transformed position)
+pub fn get_physics_shape_vertex(body: &mut PhysicsBodyData, vertex: i32) -> Vector2 {
     todo!()
     // Vector2 position = { 0.0f, 0.0f };
 
@@ -880,20 +854,19 @@ pub fn get_physics_shape_vertex(body: PhysicsBody, vertex: i32) -> Vector2 {
     // return position;
 }
 
-// Sets physics body shape transform based on radians parameter
-pub fn set_physics_body_rotation(body: PhysicsBody, radians: f32) {
-    todo!()
-    // if (body != NULL)
-    // {
-    //     body->orient = radians;
+impl PhysicsBodyData {
+    /// Sets physics body shape transform based on radians parameter
+    pub fn set_rotation(&mut self, radians: f32) {
+        self.orient = radians;
 
-    //     if (body->shape.type == PHYSICS_POLYGON)
-    //         body->shape.transform = Mat2Radians(radians);
-    // }
+        if self.shape.kind == PHYSICS_POLYGON {
+            self.shape.transform = Mat2::radians(radians);
+        }
+    }
 }
 
-// Unitializes and destroys a physics body
-pub fn destroy_physics_body(body: PhysicsBody) {
+/// Unitializes and destroys a physics body
+pub fn destroy_physics_body(body: &mut PhysicsBodyData) {
     todo!()
     // if (body != NULL)
     // {
@@ -942,7 +915,7 @@ pub fn destroy_physics_body(body: PhysicsBody) {
     // #endif
 }
 
-// Unitializes physics pointers and exits physics loop thread
+/// Unitializes physics pointers and exits physics loop thread
 pub fn close_physics() {
     todo!()
     // // Exit physics loop thread
@@ -973,7 +946,7 @@ pub fn close_physics() {
 //----------------------------------------------------------------------------------
 // Module Internal Functions Definition
 //----------------------------------------------------------------------------------
-// Finds a valid index for a new physics body initialization
+/// Finds a valid index for a new physics body initialization
 fn find_available_body_index() -> i32 {
     todo!()
     // int index = -1;
@@ -1002,7 +975,7 @@ fn find_available_body_index() -> i32 {
     // return index;
 }
 
-// Creates a random polygon shape with max vertex distance from polygon pivot
+/// Creates a random polygon shape with max vertex distance from polygon pivot
 fn create_random_polygon(radius: f32, sides: i32) -> PolygonData {
     todo!()
     // PolygonData data = { 0 };
@@ -1028,7 +1001,7 @@ fn create_random_polygon(radius: f32, sides: i32) -> PolygonData {
     // return data;
 }
 
-// Creates a rectangle polygon shape based on a min and max positions
+/// Creates a rectangle polygon shape based on a min and max positions
 fn create_rectangle_polygon(pos: Vector2, size: Vector2) -> PolygonData {
     todo!()
     // PolygonData data = { 0 };
@@ -1053,7 +1026,7 @@ fn create_rectangle_polygon(pos: Vector2, size: Vector2) -> PolygonData {
     // return data;
 }
 
-// Physics loop thread function
+/// Physics loop thread function
 fn physics_loop(arg: *mut c_void) -> *mut c_void {
     todo!()
     // #if defined(PHYSAC_DEBUG)
@@ -1078,7 +1051,7 @@ fn physics_loop(arg: *mut c_void) -> *mut c_void {
     // return 0;
 }
 
-// Physics steps calculations (dynamics, collisions and position corrections)
+/// Physics steps calculations (dynamics, collisions and position corrections)
 fn physics_step() {
     todo!()
     // // Update current steps count
@@ -1198,7 +1171,7 @@ fn physics_step() {
     // }
 }
 
-// Wrapper to ensure PhysicsStep is run with at a fixed time step
+/// Wrapper to ensure PhysicsStep is run with at a fixed time step
 pub fn run_physics_step() {
     todo!()
     // // Calculate current time
@@ -1227,21 +1200,19 @@ pub fn set_physics_time_step(delta: f64) {
     }
 }
 
-// Finds a valid index for a new manifold initialization
-fn find_available_manifold_index() -> i32 {
-    todo!()
-    // int id = physicsManifoldsCount + 1;
+/// Finds a valid index for a new manifold initialization
+fn find_available_manifold_index() -> Option<u32> {
+    let id = unsafe { PHYSICS_MANIFOLDS_COUNT } + 1;
 
-    // if (id >= PHYSAC_MAX_MANIFOLDS)
-    // {
-    //     return -1;
-    // }
+    if id >= PHYSAC_MAX_MANIFOLDS {
+        return None;
+    }
 
-    // return id;
+    Some(id)
 }
 
-// Creates a new physics manifold to solve collision
-fn create_physics_manifold(a: PhysicsBody, b: PhysicsBody) -> PhysicsManifold {
+/// Creates a new physics manifold to solve collision
+fn create_physics_manifold(a: &Arc<RwLock<PhysicsBodyData>>, b: &Arc<RwLock<PhysicsBodyData>>) -> Weak<RwLock<PhysicsManifoldData>> {
     todo!()
     // PhysicsManifold newManifold = (PhysicsManifold)PHYSAC_MALLOC(sizeof(PhysicsManifoldData));
     // usedMemory += sizeof(PhysicsManifoldData);
@@ -1274,8 +1245,8 @@ fn create_physics_manifold(a: PhysicsBody, b: PhysicsBody) -> PhysicsManifold {
     // return newManifold;
 }
 
-// Unitializes and destroys a physics manifold
-fn destroy_physics_manifold(manifold: PhysicsManifold) {
+/// Unitializes and destroys a physics manifold
+fn destroy_physics_manifold(manifold: &mut PhysicsManifoldData) {
     todo!()
     // if (manifold != NULL)
     // {
@@ -1320,8 +1291,8 @@ fn destroy_physics_manifold(manifold: PhysicsManifold) {
     // #endif
 }
 
-// Solves a created physics manifold between two physics bodies
-fn solve_physics_manifold(manifold: PhysicsManifold) {
+/// Solves a created physics manifold between two physics bodies
+fn solve_physics_manifold(manifold: &mut PhysicsManifoldData) {
     todo!()
     // switch (manifold->bodyA->shape.type)
     // {
@@ -1351,8 +1322,8 @@ fn solve_physics_manifold(manifold: PhysicsManifold) {
     //     manifold->bodyB->isGrounded = (manifold->normal.y < 0);
 }
 
-// Solves collision between two circle shape physics bodies
-fn solve_circle_to_circle(manifold: PhysicsManifold) {
+/// Solves collision between two circle shape physics bodies
+fn solve_circle_to_circle(manifold: &mut PhysicsManifoldData) {
     todo!()
     // PhysicsBody bodyA = manifold->bodyA;
     // PhysicsBody bodyB = manifold->bodyB;
@@ -1394,35 +1365,37 @@ fn solve_circle_to_circle(manifold: PhysicsManifold) {
     //     bodyA->isGrounded = (manifold->normal.y < 0);
 }
 
-// Solves collision between a circle to a polygon shape physics bodies
-fn solve_circle_to_polygon(manifold: PhysicsManifold) {
-    todo!()
-    // PhysicsBody bodyA = manifold->bodyA;
-    // PhysicsBody bodyB = manifold->bodyB;
+/// Solves collision between a circle to a polygon shape physics bodies
+fn solve_circle_to_polygon(manifold: &mut PhysicsManifoldData) {
+    let body_a = manifold.body_a.upgrade();
+    let body_b = manifold.body_b.upgrade();
 
-    // if ((bodyA == NULL) || (bodyB == NULL))
-    //     return;
+    if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
+        let mut body_a = body_a.write().unwrap();
+        let mut body_b = body_b.write().unwrap();
 
-    // SolveDifferentShapes(manifold, bodyA, bodyB);
+        solve_different_shapes(manifold, &mut *body_a, &mut *body_b);
+    }
 }
 
-// Solves collision between a circle to a polygon shape physics bodies
-fn solve_polygon_to_circle(manifold: PhysicsManifold) {
-    todo!()
-    // PhysicsBody bodyA = manifold->bodyA;
-    // PhysicsBody bodyB = manifold->bodyB;
+/// Solves collision between a circle to a polygon shape physics bodies
+fn solve_polygon_to_circle(manifold: &mut PhysicsManifoldData) {
+    let body_a = manifold.body_a.upgrade();
+    let body_b = manifold.body_b.upgrade();
 
-    // if ((bodyA == NULL) || (bodyB == NULL))
-    //     return;
+    if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
+        let mut body_a = body_a.write().unwrap();
+        let mut body_b = body_b.write().unwrap();
 
-    // SolveDifferentShapes(manifold, bodyB, bodyA);
+        solve_different_shapes(manifold, &mut *body_b, &mut *body_a);
 
-    // manifold->normal.x *= -1.0f;
-    // manifold->normal.y *= -1.0f;
+        manifold.normal.x *= -1.0;
+        manifold.normal.y *= -1.0;
+    }
 }
 
-// Solve collision between two different types of shapes
-fn solve_different_shapes(manifold: PhysicsManifold, body_a: PhysicsBody, body_b: PhysicsBody) {
+/// Solve collision between two different types of shapes
+fn solve_different_shapes(manifold: &mut PhysicsManifoldData, body_a: &mut PhysicsBodyData, body_b: &mut PhysicsBodyData) {
     todo!()
     // manifold->contactsCount = 0;
 
@@ -1513,8 +1486,8 @@ fn solve_different_shapes(manifold: PhysicsManifold, body_a: PhysicsBody, body_b
     // }
 }
 
-// Solves collision between two polygons shape physics bodies
-fn solve_polygon_to_polygon(manifold: PhysicsManifold) {
+/// Solves collision between two polygons shape physics bodies
+fn solve_polygon_to_polygon(manifold: &mut PhysicsManifoldData) {
     todo!()
     // if ((manifold->bodyA == NULL) || (manifold->bodyB == NULL))
     //     return;
@@ -1622,27 +1595,27 @@ fn solve_polygon_to_polygon(manifold: PhysicsManifold) {
     // manifold->contactsCount = currentPoint;
 }
 
-// Integrates physics forces into velocity
-fn integrate_physics_forces(body: PhysicsBody) {
-    todo!()
-    // if ((body == NULL) || (body->inverseMass == 0.0f) || !body->enabled)
-    //     return;
+/// Integrates physics forces into velocity
+fn integrate_physics_forces(body: &mut PhysicsBodyData) {
+    if (body.inverse_mass == 0.0) || !body.enabled {
+        return;
+    }
 
-    // body->velocity.x += (body->force.x*body->inverseMass)*(deltaTime/2.0);
-    // body->velocity.y += (body->force.y*body->inverseMass)*(deltaTime/2.0);
+    body.velocity.x += ((body.force.x*body.inverse_mass) as f64*(unsafe { DELTA_TIME }/2.0)) as f32;
+    body.velocity.y += ((body.force.y*body.inverse_mass) as f64*(unsafe { DELTA_TIME }/2.0)) as f32;
 
-    // if (body->useGravity)
-    // {
-    //     body->velocity.x += gravityForce.x*(deltaTime/1000/2.0);
-    //     body->velocity.y += gravityForce.y*(deltaTime/1000/2.0);
-    // }
+    if body.use_gravity {
+        body.velocity.x += (unsafe { GRAVITY_FORCE.x as f64 }*(unsafe { DELTA_TIME }/1000.0/2.0)) as f32;
+        body.velocity.y += (unsafe { GRAVITY_FORCE.y as f64 }*(unsafe { DELTA_TIME }/1000.0/2.0)) as f32;
+    }
 
-    // if (!body->freezeOrient)
-    //     body->angularVelocity += body->torque*body->inverseInertia*(deltaTime/2.0);
+    if !body.freeze_orient {
+        body.angular_velocity += (body.torque as f64*body.inverse_inertia as f64*(unsafe { DELTA_TIME }/2.0)) as f32;
+    }
 }
 
-// Initializes physics manifolds to solve collisions
-fn initialize_physics_manifolds(manifold: PhysicsManifold) {
+/// Initializes physics manifolds to solve collisions
+fn initialize_physics_manifolds(manifold: &mut PhysicsManifoldData) {
     todo!()
     // PhysicsBody bodyA = manifold->bodyA;
     // PhysicsBody bodyB = manifold->bodyB;
@@ -1675,8 +1648,8 @@ fn initialize_physics_manifolds(manifold: PhysicsManifold) {
     // }
 }
 
-// Integrates physics collisions impulses to solve collisions
-fn integrate_physics_impulses(manifold: PhysicsManifold) {
+/// Integrates physics collisions impulses to solve collisions
+fn integrate_physics_impulses(manifold: &mut PhysicsManifoldData) {
     todo!()
     // PhysicsBody bodyA = manifold->bodyA;
     // PhysicsBody bodyB = manifold->bodyB;
@@ -1787,25 +1760,27 @@ fn integrate_physics_impulses(manifold: PhysicsManifold) {
     // }
 }
 
-// Integrates physics velocity into position and forces
-fn integrate_physics_velocity(body: PhysicsBody) {
-    todo!()
-    // if ((body == NULL) ||!body->enabled)
-    //     return;
+/// Integrates physics velocity into position and forces
+fn integrate_physics_velocity(body: &mut PhysicsBodyData) {
+    if !body.enabled {
+        return;
+    }
 
-    // body->position.x += body->velocity.x*deltaTime;
-    // body->position.y += body->velocity.y*deltaTime;
+    body.position.x += (body.velocity.x as f64*unsafe { DELTA_TIME }) as f32;
+    body.position.y += (body.velocity.y as f64*unsafe { DELTA_TIME }) as f32;
 
-    // if (!body->freezeOrient)
-    //     body->orient += body->angularVelocity*deltaTime;
+    if !body.freeze_orient {
+        body.orient += (body.angular_velocity as f64*unsafe { DELTA_TIME }) as f32;
+    }
 
-    // Mat2Set(&body->shape.transform, body->orient);
+    let orient = body.orient;
+    body.shape.transform.set(orient);
 
-    // IntegratePhysicsForces(body);
+    integrate_physics_forces(&mut *body);
 }
 
-// Corrects physics bodies positions based on manifolds collision information
-fn correct_physics_positions(manifold: PhysicsManifold) {
+/// Corrects physics bodies positions based on manifolds collision information
+fn correct_physics_positions(manifold: &mut PhysicsManifoldData) {
     todo!()
     // PhysicsBody bodyA = manifold->bodyA;
     // PhysicsBody bodyB = manifold->bodyB;
@@ -1830,29 +1805,26 @@ fn correct_physics_positions(manifold: PhysicsManifold) {
     // }
 }
 
-// Returns the extreme point along a direction within a polygon
+/// Returns the extreme point along a direction within a polygon
 fn get_support(shape: PhysicsShape, dir: Vector2) -> Vector2 {
-    todo!()
-    // float bestProjection = -PHYSAC_FLT_MAX;
-    // Vector2 bestVertex = { 0.0f, 0.0f };
-    // PolygonData data = shape.vertexData;
+    let mut best_projection = -f32::MIN_POSITIVE;
+    let mut best_vertex = Vector2 { x: 0.0, y: 0.0 };
+    let data = shape.vertex_data;
 
-    // for (int i = 0; i < data.vertexCount; i++)
-    // {
-    //     Vector2 vertex = data.positions[i];
-    //     float projection = MathDot(vertex, dir);
+    for i in 0..data.vertex_count {
+        let vertex = data.positions[i as usize];
+        let projection = vertex.dot(dir);
 
-    //     if (projection > bestProjection)
-    //     {
-    //         bestVertex = vertex;
-    //         bestProjection = projection;
-    //     }
-    // }
+        if projection > best_projection {
+            best_vertex = vertex;
+            best_projection = projection;
+        }
+    }
 
-    // return bestVertex;
+    best_vertex
 }
 
-// Finds polygon shapes axis least penetration
+/// Finds polygon shapes axis least penetration
 fn find_axis_least_penetration(face_index: *mut i32, shape_a: PhysicsShape, shape_b: PhysicsShape) -> f32 {
     todo!()
     // float bestDistance = -PHYSAC_FLT_MAX;
@@ -1895,7 +1867,7 @@ fn find_axis_least_penetration(face_index: *mut i32, shape_a: PhysicsShape, shap
     // return bestDistance;
 }
 
-// Finds two polygon shapes incident face
+/// Finds two polygon shapes incident face
 fn find_incident_face(v0: *mut Vector2, v1: *mut Vector2, ref_shape: PhysicsShape, inc_shape: PhysicsShape, index: i32) {
     todo!()
     // PolygonData refData = ref.vertexData;
@@ -1930,7 +1902,7 @@ fn find_incident_face(v0: *mut Vector2, v1: *mut Vector2, ref_shape: PhysicsShap
     // *v1 = Vector2Add(*v1, inc.body->position);
 }
 
-// Calculates clipping based on a normal and two faces
+/// Calculates clipping based on a normal and two faces
 fn clip(normal: Vector2, clip: f32, face_a: *mut Vector2, face_b: *mut Vector2) -> i32 {
     todo!()
     // int sp = 0;
@@ -1967,24 +1939,20 @@ fn clip(normal: Vector2, clip: f32, face_a: *mut Vector2, face_b: *mut Vector2) 
     // return sp;
 }
 
-// Check if values are between bias range
+/// Check if values are between bias range
 fn bias_greater_than(value_a: f32, value_b: f32) -> bool {
-    todo!()
-    // return (valueA >= (valueB*0.95f + valueA*0.01f));
+    value_a >= (value_b*0.95 + value_a*0.01)
 }
 
-// Returns the barycenter of a triangle given by 3 points
+/// Returns the barycenter of a triangle given by 3 points
 fn triangle_barycenter(v1: Vector2, v2: Vector2, v3: Vector2) -> Vector2 {
-    todo!()
-    // Vector2 result = { 0.0f, 0.0f };
-
-    // result.x = (v1.x + v2.x + v3.x)/3;
-    // result.y = (v1.y + v2.y + v3.y)/3;
-
-    // return result;
+    Vector2 {
+        x: (v1.x + v2.x + v3.x)/3.0,
+        y: (v1.y + v2.y + v3.y)/3.0,
+    }
 }
 
-// Initializes hi-resolution MONOTONIC timer
+/// Initializes hi-resolution MONOTONIC timer
 fn init_timer() {
     todo!()
     // srand(time(NULL));              // Initialize random seed
@@ -2013,7 +1981,7 @@ fn init_timer() {
     // startTime = GetCurrTime();   // Get current time
 }
 
-// Get hi-res MONOTONIC time measure in seconds
+/// Get hi-res MONOTONIC time measure in seconds
 fn get_time_count() -> u64 {
     todo!()
     // uint64_t value = 0;
@@ -2039,96 +2007,87 @@ fn get_time_count() -> u64 {
     // return value;
 }
 
-// Get current time in milliseconds
+/// Get current time in milliseconds
 fn get_curr_time() -> f64 {
-    todo!()
-    // return (double)(GetTimeCount() - baseTime)/frequency*1000;
+    unsafe { (get_time_count() as f64 - BASE_TIME)/FREQUENCY as f64*1000.0 }
 }
 
 // Returns the cross product of a vector and a value
 #[inline(always)]
 fn math_cross(value: f32, vector: Vector2) -> Vector2 {
-    todo!()
-    // return (Vector2){ -value*vector.y, value*vector.x };
+    Vector2 { x: -value*vector.y, y: value*vector.x }
 }
 
 // Returns the cross product of two vectors
 #[inline(always)]
 fn math_cross_vector2(v1: Vector2, v2: Vector2) -> f32 {
-    todo!()
-    // return (v1.x*v2.y - v1.y*v2.x);
-}
-
-// Returns the len square root of a vector
-#[inline(always)]
-fn math_len_sqr(vector: Vector2) -> f32 {
-    todo!()
-    // return (vector.x*vector.x + vector.y*vector.y);
-}
-
-// Returns the dot product of two vectors
-#[inline(always)]
-fn math_dot(v1: Vector2, v2: Vector2) -> f32 {
-    todo!()
-    // return (v1.x*v2.x + v1.y*v2.y);
+    v1.x*v2.y - v1.y*v2.x
 }
 
 // Returns the square root of distance between two vectors
 #[inline(always)]
 fn dist_sqr(v1: Vector2, v2: Vector2) -> f32 {
-    todo!()
-    // Vector2 dir = Vector2Subtract(v1, v2);
-    // return MathDot(dir, dir);
+    let dir = v1 - v2;
+    dir.dot(dir)
 }
 
-// Returns the normalized values of a vector
-fn math_normalize(vector: *mut Vector2) {
-    todo!()
-    // float length, ilength;
+/// Returns the normalized values of a vector
+fn math_normalize(vector: &mut Vector2) {
+    let (mut length, ilength): (f32, f32);
 
-    // Vector2 aux = *vector;
-    // length = sqrtf(aux.x*aux.x + aux.y*aux.y);
+    let aux = *vector;
+    length = (aux.x*aux.x + aux.y*aux.y).sqrt();
 
-    // if (length == 0)
-    //     length = 1.0f;
+    if length == 0.0 {
+        length = 1.0;
+    }
 
-    // ilength = 1.0f/length;
+    ilength = 1.0/length;
 
-    // vector->x *= ilength;
-    // vector->y *= ilength;
+    vector.x *= ilength;
+    vector.y *= ilength;
 }
 
-// Creates a matrix 2x2 from a given radians value
-fn mat2_radians(radians: f32) -> Mat2 {
-    todo!()
-    // float c = cosf(radians);
-    // float s = sinf(radians);
+impl Mat2 {
+    /// Creates a matrix 2x2 from a given radians value
+    fn radians(radians: f32) -> Mat2 {
+        let (s, c) = radians.sin_cos();
 
-    // return (Mat2){ c, -s, s, c };
-}
+        Mat2 {
+            m00: c,
+            m01: -s,
+            m10: s,
+            m11: c,
+        }
+    }
 
-// Set values from radians to a created matrix 2x2
-fn mat2_set(matrix: *mut Mat2, radians: f32) {
-    todo!()
-    // float cos = cosf(radians);
-    // float sin = sinf(radians);
+    /// Set values from radians to a created matrix 2x2
+    fn set(&mut self, radians: f32) {
+        let (sin, cos) = radians.sin_cos();
 
-    // matrix->m00 = cos;
-    // matrix->m01 = -sin;
-    // matrix->m10 = sin;
-    // matrix->m11 = cos;
-}
+        self.m00 = cos;
+        self.m01 = -sin;
+        self.m10 = sin;
+        self.m11 = cos;
+    }
 
-// Returns the transpose of a given matrix 2x2
-#[inline(always)]
-fn mat2_transpose(matrix: Mat2) -> Mat2 {
-    todo!()
-    // return (Mat2){ matrix.m00, matrix.m10, matrix.m01, matrix.m11 };
-}
+    // Returns the transpose of a given matrix 2x2
+    #[inline(always)]
+    fn transpose(&self) -> Mat2 {
+        Mat2 {
+            m00: self.m00,
+            m01: self.m10,
+            m10: self.m01,
+            m11: self.m11,
+        }
+    }
 
-// Multiplies a vector by a matrix 2x2
-#[inline(always)]
-fn mat2_multiply_vector2(matrix: Mat2, vector: Vector2) -> Vector2 {
-    todo!()
-    // return (Vector2){ matrix.m00*vector.x + matrix.m01*vector.y, matrix.m10*vector.x + matrix.m11*vector.y };
+    // Multiplies a vector by a matrix 2x2
+    #[inline(always)]
+    fn multiply_vector2(&self, vector: Vector2) -> Vector2 {
+        Vector2 {
+            x: self.m00*vector.x + self.m01*vector.y,
+            y: self.m10*vector.x + self.m11*vector.y,
+        }
+    }
 }
