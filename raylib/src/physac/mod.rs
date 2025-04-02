@@ -122,6 +122,27 @@ impl std::ops::DerefMut for PhysicsBody {
         &mut self.0
     }
 }
+impl PhysicsBody {
+    #[must_use]
+    pub fn try_get<T, F: FnOnce(&PhysicsBodyData) -> T>(&self, f: F) -> Option<T> {
+        self.0.upgrade().and_then(|body| body.read().ok().map(|body| f(&*body)))
+    }
+
+    #[must_use]
+    pub fn try_get_mut<T, F: FnOnce(&mut PhysicsBodyData) -> T>(&self, f: F) -> Option<T> {
+        self.0.upgrade().and_then(|body| body.write().ok().map(|mut body| f(&mut *body)))
+    }
+
+    #[must_use]
+    pub fn position(&self) -> Option<Vector2> {
+        self.try_get(|body| body.position)
+    }
+
+    #[must_use]
+    pub fn set_position(&self, value: Vector2) -> Option<()> {
+        self.try_get_mut(|body| body.position = value)
+    }
+}
 
 // Mat2 type (used for polygon shape rotation matrix)
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -1289,33 +1310,32 @@ fn destroy_physics_manifold(manifold: &mut PhysicsManifoldData) {
 
 /// Solves a created physics manifold between two physics bodies
 fn solve_physics_manifold(manifold: &mut PhysicsManifoldData) {
-    todo!()
-    // switch (manifold->bodyA->shape.type)
-    // {
-    //     case PHYSICS_CIRCLE:
-    //     {
-    //         switch (manifold->bodyB->shape.type)
-    //         {
-    //             case PHYSICS_CIRCLE: SolveCircleToCircle(manifold); break;
-    //             case PHYSICS_POLYGON: SolveCircleToPolygon(manifold); break;
-    //             default: break;
-    //         }
-    //     } break;
-    //     case PHYSICS_POLYGON:
-    //     {
-    //         switch (manifold->bodyB->shape.type)
-    //         {
-    //             case PHYSICS_CIRCLE: SolvePolygonToCircle(manifold); break;
-    //             case PHYSICS_POLYGON: SolvePolygonToPolygon(manifold); break;
-    //             default: break;
-    //         }
-    //     } break;
-    //     default: break;
-    // }
+    // The C version doesn't check these so...
+    let body_a = manifold.body_a.upgrade().unwrap();
+    let body_b = manifold.body_b.upgrade().unwrap();
 
-    // // Update physics body grounded state if normal direction is down and grounded state is not set yet in previous manifolds
-    // if (!manifold->bodyB->isGrounded)
-    //     manifold->bodyB->isGrounded = (manifold->normal.y < 0);
+    let     body_a = body_a.read ().unwrap();
+    let mut body_b = body_b.write().unwrap();
+
+    match body_a.shape.kind {
+        PHYSICS_CIRCLE => {
+            match body_b.shape.kind {
+                PHYSICS_CIRCLE => solve_circle_to_circle(manifold),
+                PHYSICS_POLYGON => solve_circle_to_polygon(manifold),
+            }
+        }
+        PHYSICS_POLYGON => {
+            match body_b.shape.kind {
+                PHYSICS_CIRCLE => solve_polygon_to_circle(manifold),
+                PHYSICS_POLYGON => solve_polygon_to_polygon(manifold),
+            }
+        }
+    }
+
+    // Update physics body grounded state if normal direction is down and grounded state is not set yet in previous manifolds
+    if !body_b.is_grounded {
+        body_b.is_grounded = manifold.normal.y < 0.0;
+    }
 }
 
 /// Solves collision between two circle shape physics bodies
@@ -1612,36 +1632,41 @@ fn integrate_physics_forces(body: &mut PhysicsBodyData) {
 
 /// Initializes physics manifolds to solve collisions
 fn initialize_physics_manifolds(manifold: &mut PhysicsManifoldData) {
-    todo!()
-    // PhysicsBody bodyA = manifold->bodyA;
-    // PhysicsBody bodyB = manifold->bodyB;
+    let body_a = manifold.body_a.upgrade();
+    let body_b = manifold.body_b.upgrade();
 
-    // if ((bodyA == NULL) || (bodyB == NULL))
-    //     return;
+    if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
+        let body_a = body_a.read().unwrap();
+        let body_b = body_b.read().unwrap();
 
-    // // Calculate average restitution, static and dynamic friction
-    // manifold->restitution = sqrtf(bodyA->restitution*bodyB->restitution);
-    // manifold->staticFriction = sqrtf(bodyA->staticFriction*bodyB->staticFriction);
-    // manifold->dynamicFriction = sqrtf(bodyA->dynamicFriction*bodyB->dynamicFriction);
+        // Calculate average restitution, static and dynamic friction
+        manifold.restitution = (body_a.restitution*body_b.restitution).sqrt();
+        manifold.static_friction = (body_a.static_friction*body_b.static_friction).sqrt();
+        manifold.dynamic_friction = (body_a.dynamic_friction*body_b.dynamic_friction).sqrt();
 
-    // for (int i = 0; i < manifold->contactsCount; i++)
-    // {
-    //     // Caculate radius from center of mass to contact
-    //     Vector2 radiusA = Vector2Subtract(manifold->contacts[i], bodyA->position);
-    //     Vector2 radiusB = Vector2Subtract(manifold->contacts[i], bodyB->position);
+        for i in 0..manifold.contacts_count
+        {
+            // Caculate radius from center of mass to contact
+            let radius_a = manifold.contacts[i as usize] - body_a.position;
+            let radius_b = manifold.contacts[i as usize] - body_b.position;
 
-    //     Vector2 crossA = MathCross(bodyA->angularVelocity, radiusA);
-    //     Vector2 crossB = MathCross(bodyB->angularVelocity, radiusB);
+            let cross_a = math_cross(body_a.angular_velocity, radius_a);
+            let cross_b = math_cross(body_b.angular_velocity, radius_b);
 
-    //     Vector2 radiusV = { 0.0f, 0.0f };
-    //     radiusV.x = bodyB->velocity.x + crossB.x - bodyA->velocity.x - crossA.x;
-    //     radiusV.y = bodyB->velocity.y + crossB.y - bodyA->velocity.y - crossA.y;
+            let mut radius_v = Vector2 { x: 0.0, y: 0.0 };
+            radius_v.x = body_b.velocity.x + cross_b.x - body_a.velocity.x - cross_a.x;
+            radius_v.y = body_b.velocity.y + cross_b.y - body_a.velocity.y - cross_a.y;
 
-    //     // Determine if we should perform a resting collision or not;
-    //     // The idea is if the only thing moving this object is gravity, then the collision should be performed without any restitution
-    //     if (MathLenSqr(radiusV) < (MathLenSqr((Vector2){ gravityForce.x*deltaTime/1000, gravityForce.y*deltaTime/1000 }) + PHYSAC_EPSILON))
-    //         manifold->restitution = 0;
-    // }
+            // Determine if we should perform a resting collision or not;
+            // The idea is if the only thing moving this object is gravity, then the collision should be performed without any restitution
+            if radius_v.length_sqr() < ((Vector2 {
+                x: unsafe { GRAVITY_FORCE.x }*unsafe { DELTA_TIME } as f32/1000.0,
+                y: unsafe { GRAVITY_FORCE.y }*unsafe { DELTA_TIME } as f32/1000.0,
+            }).length_sqr() + f32::EPSILON) {
+                manifold.restitution = 0.0;
+            }
+        }
+    }
 }
 
 /// Integrates physics collisions impulses to solve collisions
@@ -1777,35 +1802,35 @@ fn integrate_physics_velocity(body: &mut PhysicsBodyData) {
 
 /// Corrects physics bodies positions based on manifolds collision information
 fn correct_physics_positions(manifold: &mut PhysicsManifoldData) {
-    todo!()
-    // PhysicsBody bodyA = manifold->bodyA;
-    // PhysicsBody bodyB = manifold->bodyB;
+    let body_a = manifold.body_a.upgrade();
+    let body_b = manifold.body_b.upgrade();
 
-    // if ((bodyA == NULL) || (bodyB == NULL))
-    //     return;
+    if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
+        let mut body_a = body_a.write().unwrap();
+        let mut body_b = body_b.write().unwrap();
 
-    // Vector2 correction = { 0.0f, 0.0f };
-    // correction.x = (max(manifold->penetration - PHYSAC_PENETRATION_ALLOWANCE, 0.0f)/(bodyA->inverseMass + bodyB->inverseMass))*manifold->normal.x*PHYSAC_PENETRATION_CORRECTION;
-    // correction.y = (max(manifold->penetration - PHYSAC_PENETRATION_ALLOWANCE, 0.0f)/(bodyA->inverseMass + bodyB->inverseMass))*manifold->normal.y*PHYSAC_PENETRATION_CORRECTION;
+        let correction = Vector2 {
+            x: ((manifold.penetration - PHYSAC_PENETRATION_ALLOWANCE).max(0.0)/(body_a.inverse_mass + body_b.inverse_mass))*manifold.normal.x*PHYSAC_PENETRATION_CORRECTION,
+            y: ((manifold.penetration - PHYSAC_PENETRATION_ALLOWANCE).max(0.0)/(body_a.inverse_mass + body_b.inverse_mass))*manifold.normal.y*PHYSAC_PENETRATION_CORRECTION,
+        };
 
-    // if (bodyA->enabled)
-    // {
-    //     bodyA->position.x -= correction.x*bodyA->inverseMass;
-    //     bodyA->position.y -= correction.y*bodyA->inverseMass;
-    // }
+        if body_a.enabled {
+            body_a.position.x -= correction.x*body_a.inverse_mass;
+            body_a.position.y -= correction.y*body_a.inverse_mass;
+        }
 
-    // if (bodyB->enabled)
-    // {
-    //     bodyB->position.x += correction.x*bodyB->inverseMass;
-    //     bodyB->position.y += correction.y*bodyB->inverseMass;
-    // }
+        if body_b.enabled {
+            body_b.position.x += correction.x*body_b.inverse_mass;
+            body_b.position.y += correction.y*body_b.inverse_mass;
+        }
+    }
 }
 
 /// Returns the extreme point along a direction within a polygon
-fn get_support(shape: PhysicsShape, dir: Vector2) -> Vector2 {
+fn get_support(shape: &PhysicsShape, dir: Vector2) -> Vector2 {
     let mut best_projection = -f32::MIN_POSITIVE;
     let mut best_vertex = Vector2 { x: 0.0, y: 0.0 };
-    let data = shape.vertex_data;
+    let data = &shape.vertex_data;
 
     for i in 0..data.vertex_count {
         let vertex = data.positions[i as usize];
@@ -1821,81 +1846,75 @@ fn get_support(shape: PhysicsShape, dir: Vector2) -> Vector2 {
 }
 
 /// Finds polygon shapes axis least penetration
-fn find_axis_least_penetration(face_index: *mut i32, shape_a: PhysicsShape, shape_b: PhysicsShape) -> f32 {
-    todo!()
-    // float bestDistance = -PHYSAC_FLT_MAX;
-    // int bestIndex = 0;
+fn find_axis_least_penetration(face_index: &mut u32, shape_a: &PhysicsShape, shape_b: &PhysicsShape) -> f32 {
+    let mut best_distance = f32::MIN;
+    let mut best_index = 0;
 
-    // PolygonData dataA = shapeA.vertexData;
+    let data_a = &shape_a.vertex_data;
 
-    // for (int i = 0; i < dataA.vertexCount; i++)
-    // {
-    //     // Retrieve a face normal from A shape
-    //     Vector2 normal = dataA.normals[i];
-    //     Vector2 transNormal = Mat2MultiplyVector2(shapeA.transform, normal);
+    for i in 0..data_a.vertex_count {
+        // Retrieve a face normal from A shape
+        let mut normal = data_a.normals[i as usize];
+        let trans_normal = shape_a.transform.multiply_vector2(normal);
 
-    //     // Transform face normal into B shape's model space
-    //     Mat2 buT = Mat2Transpose(shapeB.transform);
-    //     normal = Mat2MultiplyVector2(buT, transNormal);
+        // Transform face normal into B shape's model space
+        let bu_t = shape_b.transform.transpose();
+        normal = bu_t.multiply_vector2(trans_normal);
 
-    //     // Retrieve support point from B shape along -n
-    //     Vector2 support = GetSupport(shapeB, (Vector2){ -normal.x, -normal.y });
+        // Retrieve support point from B shape along -n
+        let support = get_support(shape_b, Vector2 { x: -normal.x, y: -normal.y });
 
-    //     // Retrieve vertex on face from A shape, transform into B shape's model space
-    //     Vector2 vertex = dataA.positions[i];
-    //     vertex = Mat2MultiplyVector2(shapeA.transform, vertex);
-    //     vertex = Vector2Add(vertex, shapeA.body->position);
-    //     vertex = Vector2Subtract(vertex, shapeB.body->position);
-    //     vertex = Mat2MultiplyVector2(buT, vertex);
+        // Retrieve vertex on face from A shape, transform into B shape's model space
+        let mut vertex = data_a.positions[i as usize];
+        vertex = shape_a.transform.multiply_vector2(vertex);
+        vertex = vertex + shape_a.body.position().unwrap();
+        vertex = vertex - shape_b.body.position().unwrap();
+        vertex = bu_t.multiply_vector2(vertex);
 
-    //     // Compute penetration distance in B shape's model space
-    //     float distance = MathDot(normal, Vector2Subtract(support, vertex));
+        // Compute penetration distance in B shape's model space
+        let distance = normal.dot(support - vertex);
 
-    //     // Store greatest distance
-    //     if (distance > bestDistance)
-    //     {
-    //         bestDistance = distance;
-    //         bestIndex = i;
-    //     }
-    // }
+        // Store greatest distance
+        if distance > best_distance {
+            best_distance = distance;
+            best_index = i;
+        }
+    }
 
-    // *faceIndex = bestIndex;
-    // return bestDistance;
+    *face_index = best_index;
+    best_distance
 }
 
 /// Finds two polygon shapes incident face
-fn find_incident_face(v0: *mut Vector2, v1: *mut Vector2, ref_shape: PhysicsShape, inc_shape: PhysicsShape, index: i32) {
-    todo!()
-    // PolygonData refData = ref.vertexData;
-    // PolygonData incData = inc.vertexData;
+fn find_incident_face(v0: &mut Vector2, v1: &mut Vector2, ref_shape: &PhysicsShape, inc_shape: &PhysicsShape, index: u32) {
+    let ref_data = &ref_shape.vertex_data;
+    let inc_data = &inc_shape.vertex_data;
 
-    // Vector2 referenceNormal = refData.normals[index];
+    let mut reference_normal = ref_data.normals[index as usize];
 
-    // // Calculate normal in incident's frame of reference
-    // referenceNormal = Mat2MultiplyVector2(ref.transform, referenceNormal); // To world space
-    // referenceNormal = Mat2MultiplyVector2(Mat2Transpose(inc.transform), referenceNormal); // To incident's model space
+    // Calculate normal in incident's frame of reference
+    reference_normal = ref_shape.transform.multiply_vector2(reference_normal); // To world space
+    reference_normal = inc_shape.transform.transpose().multiply_vector2(reference_normal); // To incident's model space
 
-    // // Find most anti-normal face on polygon
-    // int incidentFace = 0;
-    // float minDot = PHYSAC_FLT_MAX;
+    // Find most anti-normal face on polygon
+    let mut incident_face = 0;
+    let mut min_dot = f32::MAX;
 
-    // for (int i = 0; i < incData.vertexCount; i++)
-    // {
-    //     float dot = MathDot(referenceNormal, incData.normals[i]);
+    for i in 0..inc_data.vertex_count {
+        let dot = reference_normal.dot(inc_data.normals[i as usize]);
 
-    //     if (dot < minDot)
-    //     {
-    //         minDot = dot;
-    //         incidentFace = i;
-    //     }
-    // }
+        if dot < min_dot {
+            min_dot = dot;
+            incident_face = i;
+        }
+    }
 
-    // // Assign face vertices for incident face
-    // *v0 = Mat2MultiplyVector2(inc.transform, incData.positions[incidentFace]);
-    // *v0 = Vector2Add(*v0, inc.body->position);
-    // incidentFace = (((incidentFace + 1) < incData.vertexCount) ? (incidentFace + 1) : 0);
-    // *v1 = Mat2MultiplyVector2(inc.transform, incData.positions[incidentFace]);
-    // *v1 = Vector2Add(*v1, inc.body->position);
+    // Assign face vertices for incident face
+    *v0 = inc_shape.transform.multiply_vector2(inc_data.positions[incident_face as usize]);
+    *v0 = *v0 + inc_shape.body.position().unwrap();
+    incident_face = if (incident_face + 1) < inc_data.vertex_count { incident_face + 1 } else { 0 };
+    *v1 = inc_shape.transform.multiply_vector2(inc_data.positions[incident_face as usize]);
+    *v1 = *v1 + inc_shape.body.position().unwrap();
 }
 
 /// Calculates clipping based on a normal and two faces
