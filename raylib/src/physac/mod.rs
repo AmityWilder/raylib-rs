@@ -1913,40 +1913,42 @@ fn find_incident_face(v0: &mut Vector2, v1: &mut Vector2, ref_shape: &PhysicsSha
 }
 
 /// Calculates clipping based on a normal and two faces
-fn clip(normal: Vector2, clip: f32, face_a: *mut Vector2, face_b: *mut Vector2) -> i32 {
-    todo!()
-    // int sp = 0;
-    // Vector2 out[2] = { *faceA, *faceB };
+fn clip(normal: Vector2, clip: f32, face_a: &mut Vector2, face_b: &mut Vector2) -> u32 {
+    let mut sp = 0;
+    let mut out = [*face_a, *face_b];
 
-    // // Retrieve distances from each endpoint to the line
-    // float distanceA = MathDot(normal, *faceA) - clip;
-    // float distanceB = MathDot(normal, *faceB) - clip;
+    // Retrieve distances from each endpoint to the line
+    let distance_a = normal.dot(*face_a) - clip;
+    let distance_b = normal.dot(*face_b) - clip;
 
-    // // If negative (behind plane)
-    // if (distanceA <= 0.0f)
-    //     out[sp++] = *faceA;
+    // If negative (behind plane)
+    if distance_a <= 0.0 {
+        out[sp as usize] = *face_a;
+        sp += 1;
+    }
 
-    // if (distanceB <= 0.0f)
-    //     out[sp++] = *faceB;
+    if distance_b <= 0.0 {
+        out[sp as usize] = *face_b;
+        sp += 1;
+    }
 
-    // // If the points are on different sides of the plane
-    // if ((distanceA*distanceB) < 0.0f)
-    // {
-    //     // Push intersection point
-    //     float alpha = distanceA/(distanceA - distanceB);
-    //     out[sp] = *faceA;
-    //     Vector2 delta = Vector2Subtract(*faceB, *faceA);
-    //     delta.x *= alpha;
-    //     delta.y *= alpha;
-    //     out[sp] = Vector2Add(out[sp], delta);
-    //     sp++;
-    // }
+    // If the points are on different sides of the plane
+    if (distance_a*distance_b) < 0.0 {
+        // Push intersection point
+        let alpha = distance_a/(distance_a - distance_b);
+        out[sp as usize] = *face_a;
+        let mut delta = *face_b - *face_a;
+        delta.x *= alpha;
+        delta.y *= alpha;
+        out[sp as usize] = out[sp as usize] + delta;
+        sp += 1;
+    }
 
-    // // Assign the new converted values
-    // *faceA = out[0];
-    // *faceB = out[1];
+    // Assign the new converted values
+    *face_a = out[0];
+    *face_b = out[1];
 
-    // return sp;
+    sp
 }
 
 /// Check if values are between bias range
