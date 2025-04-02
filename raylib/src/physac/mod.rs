@@ -436,7 +436,7 @@ pub fn create_physics_body_circle(pos: Vector2, radius: f32, density: f32) -> Ph
     //     physicsBodiesCount++;
 
     //     #if defined(PHYSAC_DEBUG)
-    //         println!("[PHYSAC] created polygon physics body id %i", newBody->id);
+    //         println!("[PHYSAC] created polygon physics body id {}", newBody->id);
     //     #endif
     // }
     // #if defined(PHYSAC_DEBUG)
@@ -524,7 +524,7 @@ pub fn create_physics_body_rectangle(pos: Vector2, width: f32, height: f32, dens
     //     physicsBodiesCount++;
 
     //     #if defined(PHYSAC_DEBUG)
-    //         println!("[PHYSAC] created polygon physics body id %i", newBody->id);
+    //         println!("[PHYSAC] created polygon physics body id {}", newBody->id);
     //     #endif
     // }
     // #if defined(PHYSAC_DEBUG)
@@ -611,7 +611,7 @@ pub fn create_physics_body_polygon(pos: Vector2, radius: f32, sides: i32, densit
     //     physicsBodiesCount++;
 
     //     #if defined(PHYSAC_DEBUG)
-    //         println!("[PHYSAC] created polygon physics body id %i", newBody->id);
+    //         println!("[PHYSAC] created polygon physics body id {}", newBody->id);
     //     #endif
     // }
     // #if defined(PHYSAC_DEBUG)
@@ -914,7 +914,7 @@ pub fn destroy_physics_body(body: &mut PhysicsBodyData) {
     //     if (index == -1)
     //     {
     //         #if defined(PHYSAC_DEBUG)
-    //             println!("[PHYSAC] Not possible to find body id %i in pointers array", id);
+    //             println!("[PHYSAC] Not possible to find body id {} in pointers array", id);
     //         #endif
     //         return;
     //     }
@@ -935,7 +935,7 @@ pub fn destroy_physics_body(body: &mut PhysicsBodyData) {
     //     physicsBodiesCount--;
 
     //     #if defined(PHYSAC_DEBUG)
-    //         println!("[PHYSAC] destroyed physics body id %i", id);
+    //         println!("[PHYSAC] destroyed physics body id {}", id);
     //     #endif
     // }
     // #if defined(PHYSAC_DEBUG)
@@ -964,9 +964,9 @@ pub fn close_physics() {
 
     // #if defined(PHYSAC_DEBUG)
     //     if (physicsBodiesCount > 0 || usedMemory != 0)
-    //         println!("[PHYSAC] physics module closed with %i still allocated bodies [MEMORY: %i bytes]", physicsBodiesCount, usedMemory);
+    //         println!("[PHYSAC] physics module closed with {} still allocated bodies [MEMORY: {} bytes]", physicsBodiesCount, usedMemory);
     //     else if (physicsManifoldsCount > 0 || usedMemory != 0)
-    //         println!("[PHYSAC] physics module closed with %i still allocated manifolds [MEMORY: %i bytes]", physicsManifoldsCount, usedMemory);
+    //         println!("[PHYSAC] physics module closed with {} still allocated manifolds [MEMORY: {} bytes]", physicsManifoldsCount, usedMemory);
     //     else
     //         println!("[PHYSAC] physics module closed successfully");
     // #endif
@@ -1263,49 +1263,46 @@ fn create_physics_manifold(a: &PhysicsBody, b: &PhysicsBody) -> PhysicsManifold 
 }
 
 /// Unitializes and destroys a physics manifold
-fn destroy_physics_manifold(manifold: &mut PhysicsManifoldData) {
-    todo!()
-    // if (manifold != NULL)
-    // {
-    //     int id = manifold->id;
-    //     int index = -1;
+fn destroy_physics_manifold(manifold: PhysicsManifold) {
+    if let Some(manifold) = manifold.upgrade() {
+        let mut contacts = CONTACTS.write().unwrap();
 
-    //     for (int i = 0; i < physicsManifoldsCount; i++)
-    //     {
-    //         if (contacts[i]->id == id)
-    //         {
-    //             index = i;
-    //             break;
-    //         }
-    //     }
+        let id = manifold.read().unwrap().id;
+        let mut index = None;
 
-    //     if (index == -1)
-    //     {
-    //         #if defined(PHYSAC_DEBUG)
-    //             println!("[PHYSAC] Not possible to manifold id %i in pointers array", id);
-    //         #endif
-    //         return;
-    //     }
+        for i in 0..PHYSICS_MANIFOLDS_COUNT.load(Relaxed) {
+            let contact = contacts[i as usize].as_ref().unwrap();
+            if contact.read().unwrap().id == id {
+                index = Some(i);
+                break;
+            }
+        }
 
-    //     // Free manifold allocated memory
-    //     PHYSAC_FREE(manifold);
-    //     usedMemory -= sizeof(PhysicsManifoldData);
-    //     contacts[index] = NULL;
+        if index.is_none() {
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] Not possible to manifold id {} in pointers array", id);
+            return;
+        }
+        let index = index.unwrap();
 
-    //     // Reorder physics manifolds pointers array and its catched index
-    //     for (int i = index; i < physicsManifoldsCount; i++)
-    //     {
-    //         if ((i + 1) < physicsManifoldsCount)
-    //             contacts[i] = contacts[i + 1];
-    //     }
+        // Free manifold allocated memory
+        drop(manifold);
+        USED_MEMORY.fetch_sub(std::mem::size_of::<PhysicsManifoldData>() as u32, Relaxed);
+        contacts[index as usize] = None;
 
-    //     // Update physics manifolds count
-    //     physicsManifoldsCount--;
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         println!("[PHYSAC] error trying to destroy a null referenced manifold");
-    // #endif
+        // Reorder physics manifolds pointers array and its catched index
+        for i in index..PHYSICS_MANIFOLDS_COUNT.load(Relaxed) {
+            if let ([.., curr], [next, ..]) = contacts.split_at_mut(i as usize) {
+                std::mem::swap(curr, next);
+            }
+        }
+
+        // Update physics manifolds count
+        PHYSICS_MANIFOLDS_COUNT.store(PHYSICS_MANIFOLDS_COUNT.load(Relaxed) - 1, Relaxed);
+    } else {
+        #[cfg(feature = "physac_debug")]
+        println!("[PHYSAC] error trying to destroy a null referenced manifold");
+    }
 }
 
 /// Solves a created physics manifold between two physics bodies
