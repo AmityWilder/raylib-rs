@@ -300,15 +300,8 @@ impl std::ops::DerefMut for PhysicsManifold {
 use std::{
     sync::{
         atomic::{
-            Ordering::Relaxed,
-            AtomicBool,
-            AtomicU32,
-            AtomicU64,
-        },
-        Arc,
-        LazyLock,
-        RwLock,
-        Weak,
+            AtomicBool, AtomicU32, Ordering::Relaxed
+        }, Arc, LazyLock, OnceLock, RwLock, Weak
     },
     time::{Duration, Instant},
 };
@@ -332,17 +325,13 @@ static USED_MEMORY: AtomicU32 = AtomicU32::new(0);
 /// Physics thread enabled state
 static PHYSICS_THREAD_ENABLED: AtomicBool = AtomicBool::new(false);
 /// Offset time for MONOTONIC clock
-static mut BASE_TIME: f64 = 0.0;
-/// Start time in milliseconds
-static PHYSAC_EPOCK: LazyLock<Instant> = LazyLock::new(Instant::now);
+static BASE_TIME: OnceLock<Instant> = OnceLock::new();
 /// Start time in milliseconds
 static mut START_TIME: f64 = 0.0;
 /// Delta time used for physics steps, in milliseconds
 static mut DELTA_TIME: f64 = 1.0/60.0/10.0 * 1000.0;
 /// Current time in milliseconds
 static mut CURRENT_TIME: f64 = 0.0;
-/// Hi-res clock frequency
-static FREQUENCY: AtomicU64 = AtomicU64::new(0);
 
 /// Physics time step delta time accumulator
 static mut ACCUMULATOR: f64 = 0.0;
@@ -1966,41 +1955,19 @@ fn triangle_barycenter(v1: Vector2, v2: Vector2, v3: Vector2) -> Vector2 {
 
 /// Initializes hi-resolution MONOTONIC timer
 fn init_timer() {
-    todo!()
-    // srand(time(NULL));              // Initialize random seed
-
-    // #if defined(_WIN32)
-    //     QueryPerformanceFrequency((unsigned long long int *) &frequency);
-    // #endif
-
-    // #if defined(__linux__)
-    //     struct timespec now;
-    //     if (clock_gettime(CLOCK_MONOTONIC, &now) == 0)
-    //         frequency = 1000000000;
-    // #endif
-
-    // #if defined(__APPLE__)
-    //     mach_timebase_info_data_t timebase;
-    //     mach_timebase_info(&timebase);
-    //     frequency = (timebase.denom*1e9)/timebase.numer;
-    // #endif
-
-    // #if defined(EMSCRIPTEN)
-    //   frequency = 1000;
-    // #endif
-
-    // baseTime = GetTimeCount();      // Get MONOTONIC clock time offset
-    // startTime = GetCurrTime();   // Get current time
+    BASE_TIME.set(Instant::now()).expect("tried to initialize timer twice"); // Get MONOTONIC clock time offset
+    unsafe { START_TIME = get_curr_time() }; // Get current time
 }
 
 /// Get hi-res MONOTONIC time measure in seconds
 fn get_time_count() -> u64 {
-    PHYSAC_EPOCK.elapsed().as_secs()
+    BASE_TIME.get().expect("BASE_TIME should be initialized before checking time").elapsed().as_secs()
 }
 
 /// Get current time in milliseconds
 fn get_curr_time() -> f64 {
-    (get_time_count() as f64 - unsafe { BASE_TIME })/FREQUENCY.load(Relaxed) as f64*1000.0
+    let duration = BASE_TIME.get().expect("BASE_TIME should be initialized before checking time").elapsed();
+    duration.as_secs_f64() * 1_000.0
 }
 
 // Returns the cross product of a vector and a value
