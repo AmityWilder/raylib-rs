@@ -222,7 +222,7 @@ pub struct PhysicsBodyData {
     pub shape: PhysicsShape,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PhysicsManifoldData {
     /// Reference unique identifier
     pub id: u32,
@@ -276,7 +276,21 @@ impl std::ops::DerefMut for PhysicsManifold {
 *
 ************************************************************************************/
 
-use std::{ffi::c_void, sync::{atomic::{self, AtomicBool, AtomicU32, AtomicU64}, Arc, LazyLock, RwLock, Weak}, time::{Duration, Instant}};
+use std::{
+    sync::{
+        atomic::{
+            Ordering::Relaxed,
+            AtomicBool,
+            AtomicU32,
+            AtomicU64,
+        },
+        Arc,
+        LazyLock,
+        RwLock,
+        Weak,
+    },
+    time::{Duration, Instant},
+};
 // #[cfg(not(feature = "physac_no_threads"))]
 // use std::thread;
 
@@ -350,7 +364,7 @@ pub fn init_physics() {
 
 /// Returns true if physics thread is currently enabled
 pub fn is_physics_enabled() -> bool {
-    PHYSICS_THREAD_ENABLED.load(atomic::Ordering::Relaxed)
+    PHYSICS_THREAD_ENABLED.load(Relaxed)
 }
 
 /// Sets physics global gravity force
@@ -749,7 +763,7 @@ pub fn physics_shatter(body: &mut PhysicsBodyData, position: Vector2, force: f32
 
 /// Returns the current amount of created physics bodies
 pub fn get_physics_bodies_count() -> u32 {
-    PHYSICS_BODIES_COUNT.load(atomic::Ordering::Relaxed)
+    PHYSICS_BODIES_COUNT.load(Relaxed)
 }
 
 /// Returns a physics body of the bodies pool at a specific index
@@ -760,7 +774,7 @@ pub fn get_physics_bodies_count() -> u32 {
 pub fn get_physics_body(index: u32) -> Option<PhysicsBody> {
     let bodies = BODIES.read().unwrap();
 
-    if index < PHYSICS_BODIES_COUNT.load(atomic::Ordering::Relaxed) {
+    if index < PHYSICS_BODIES_COUNT.load(Relaxed) {
         if bodies[index as usize].is_none() {
             #[cfg(feature = "physac_debug")]
             println!("[PHYSAC] error when trying to get a null reference physics body");
@@ -780,7 +794,7 @@ pub fn get_physics_shape_type(index: u32) -> Option<PhysicsShapeType> {
     let mut result = None;
     let bodies = BODIES.read().unwrap();
 
-    if index < PHYSICS_BODIES_COUNT.load(atomic::Ordering::Relaxed) {
+    if index < PHYSICS_BODIES_COUNT.load(Relaxed) {
         if let Some(body) = bodies[index as usize].as_ref() {
             let body = body.read().unwrap();
             result = Some(body.shape.kind);
@@ -801,7 +815,7 @@ pub fn get_physics_shape_vertices_count(index: u32) -> u32 {
     let mut result = 0;
     let bodies = BODIES.read().unwrap();
 
-    if index < PHYSICS_BODIES_COUNT.load(atomic::Ordering::Relaxed) {
+    if index < PHYSICS_BODIES_COUNT.load(Relaxed) {
         if let Some(body) = bodies[index as usize].as_ref() {
             let body = body.read().unwrap();
             result = match body.shape.kind {
@@ -941,58 +955,53 @@ pub fn close_physics() {
 // Module Internal Functions Definition
 //----------------------------------------------------------------------------------
 /// Finds a valid index for a new physics body initialization
-fn find_available_body_index() -> i32 {
-    todo!()
-    // int index = -1;
-    // for (int i = 0; i < PHYSAC_MAX_BODIES; i++)
-    // {
-    //     int currentId = i;
+fn find_available_body_index() -> Option<u32> {
+    let mut index = None;
+    let bodies = BODIES.read().unwrap();
+    for i in 0..PHYSAC_MAX_BODIES {
+        let mut current_id = i;
 
-    //     // Check if current id already exist in other physics body
-    //     for (int k = 0; k < physicsBodiesCount; k++)
-    //     {
-    //         if (bodies[k]->id == currentId)
-    //         {
-    //             currentId++;
-    //             break;
-    //         }
-    //     }
+        // Check if current id already exist in other physics body
+        for k in 0..PHYSICS_BODIES_COUNT.load(Relaxed) {
+            let body = bodies[k as usize].as_ref().unwrap(); // every body index < PHYSICS_BODIES_COUNT should be Some
+            let body = body.read().unwrap();
+            if body.id == current_id {
+                current_id += 1;
+                break;
+            }
+        }
 
-    //     // If it is not used, use it as new physics body id
-    //     if (currentId == i)
-    //     {
-    //         index = i;
-    //         break;
-    //     }
-    // }
+        // If it is not used, use it as new physics body id
+        if current_id == i {
+            index = Some(i);
+            break;
+        }
+    }
 
-    // return index;
+    index
 }
 
 /// Creates a random polygon shape with max vertex distance from polygon pivot
-fn create_random_polygon(radius: f32, sides: i32) -> PolygonData {
-    todo!()
-    // PolygonData data = { 0 };
-    // data.vertexCount = sides;
+fn create_random_polygon(radius: f32, sides: u32) -> PolygonData {
+    let mut data = PolygonData::default();
+    data.vertex_count = sides;
 
-    // // Calculate polygon vertices positions
-    // for (int i = 0; i < data.vertexCount; i++)
-    // {
-    //     data.positions[i].x = cosf(360.0f/sides*i*PHYSAC_DEG2RAD)*radius;
-    //     data.positions[i].y = sinf(360.0f/sides*i*PHYSAC_DEG2RAD)*radius;
-    // }
+    // Calculate polygon vertices positions
+    for i in 0..data.vertex_count {
+        data.positions[i as usize].x = (360.0/sides as f32*i as f32*DEG2RAD as f32).cos()*radius;
+        data.positions[i as usize].y = (360.0/sides as f32*i as f32*DEG2RAD as f32).sin()*radius;
+    }
 
-    // // Calculate polygon faces normals
-    // for (int i = 0; i < data.vertexCount; i++)
-    // {
-    //     int nextIndex = (((i + 1) < sides) ? (i + 1) : 0);
-    //     Vector2 face = Vector2Subtract(data.positions[nextIndex], data.positions[i]);
+    // Calculate polygon faces normals
+    for i in 0..data.vertex_count {
+        let next_index = if (i + 1) < sides { i + 1 } else { 0 };
+        let face = data.positions[next_index as usize] - data.positions[i as usize];
 
-    //     data.normals[i] = (Vector2){ face.y, -face.x };
-    //     MathNormalize(&data.normals[i]);
-    // }
+        data.normals[i as usize] = Vector2 { x: face.y, y: -face.x };
+        math_normalize(&mut data.normals[i as usize]);
+    }
 
-    // return data;
+    data
 }
 
 /// Creates a rectangle polygon shape based on a min and max positions
@@ -1024,10 +1033,10 @@ fn physics_loop() {
     println!("[PHYSAC] physics thread created successfully");
 
     // Initialize physics loop thread values
-    PHYSICS_THREAD_ENABLED.store(true, atomic::Ordering::Relaxed);
+    PHYSICS_THREAD_ENABLED.store(true, Relaxed);
 
     // Physics update loop
-    while PHYSICS_THREAD_ENABLED.load(atomic::Ordering::Relaxed) {
+    while PHYSICS_THREAD_ENABLED.load(Relaxed) {
         run_physics_step();
 
         let req = Duration::from_nanos((PHYSAC_FIXED_TIME*1000.0*1000.0) as u64);
@@ -1187,7 +1196,7 @@ pub fn set_physics_time_step(delta: f64) {
 
 /// Finds a valid index for a new manifold initialization
 fn find_available_manifold_index() -> Option<u32> {
-    let id = PHYSICS_MANIFOLDS_COUNT.load(atomic::Ordering::Relaxed) + 1;
+    let id = PHYSICS_MANIFOLDS_COUNT.load(Relaxed) + 1;
 
     if id >= PHYSAC_MAX_MANIFOLDS {
         return None;
@@ -1197,37 +1206,39 @@ fn find_available_manifold_index() -> Option<u32> {
 }
 
 /// Creates a new physics manifold to solve collision
-fn create_physics_manifold(a: &Arc<RwLock<PhysicsBodyData>>, b: &Arc<RwLock<PhysicsBodyData>>) -> Weak<RwLock<PhysicsManifoldData>> {
-    todo!()
-    // PhysicsManifold newManifold = (PhysicsManifold)PHYSAC_MALLOC(sizeof(PhysicsManifoldData));
-    // usedMemory += sizeof(PhysicsManifoldData);
+fn create_physics_manifold(a: &PhysicsBody, b: &PhysicsBody) -> PhysicsManifold {
+    let mut new_weak_manifold = PhysicsManifold(Weak::new());
+    let mut new_manifold = Arc::new(RwLock::new(PhysicsManifoldData::default()));
+    USED_MEMORY.store(USED_MEMORY.load(Relaxed) + std::mem::size_of::<PhysicsManifoldData>() as u32, Relaxed); // TODO: `USED_MEMORY` doesn't represent anything meaningful in this implementation...
 
-    // int newId = FindAvailableManifoldIndex();
-    // if (newId != -1)
-    // {
-    //     // Initialize new manifold with generic values
-    //     newManifold->id = newId;
-    //     newManifold->bodyA = a;
-    //     newManifold->bodyB = b;
-    //     newManifold->penetration = 0;
-    //     newManifold->normal = PHYSAC_VECTOR_ZERO;
-    //     newManifold->contacts[0] = PHYSAC_VECTOR_ZERO;
-    //     newManifold->contacts[1] = PHYSAC_VECTOR_ZERO;
-    //     newManifold->contactsCount = 0;
-    //     newManifold->restitution = 0.0f;
-    //     newManifold->dynamicFriction = 0.0f;
-    //     newManifold->staticFriction = 0.0f;
+    if let Some(new_id) = find_available_manifold_index() {
+        // unwraps are safe here because there is no way something else has a reference to the arc we JUST created locally
+        let new_manifold_data = Arc::get_mut(&mut new_manifold).unwrap().get_mut().unwrap();
 
-    //     // Add new body to bodies pointers array and update bodies count
-    //     contacts[physicsManifoldsCount] = newManifold;
-    //     physicsManifoldsCount++;
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         println!("[PHYSAC] new physics manifold creation failed because there is any available id to use");
-    // #endif
+        // Initialize new manifold with generic values
+        new_manifold_data.id = new_id;
+        new_manifold_data.body_a = a.clone();
+        new_manifold_data.body_b = b.clone();
+        new_manifold_data.penetration = 0.0;
+        new_manifold_data.normal = Vector2::zero();
+        new_manifold_data.contacts[0] = Vector2::zero();
+        new_manifold_data.contacts[1] = Vector2::zero();
+        new_manifold_data.contacts_count = 0;
+        new_manifold_data.restitution = 0.0;
+        new_manifold_data.dynamic_friction = 0.0;
+        new_manifold_data.static_friction = 0.0;
 
-    // return newManifold;
+        // Add new body to bodies pointers array and update bodies count
+        let index = PHYSICS_MANIFOLDS_COUNT.fetch_add(1, Relaxed) as usize;
+        let mut contacts = CONTACTS.write().unwrap();
+        contacts[index] = Some(new_manifold);
+        new_weak_manifold = PhysicsManifold(Arc::downgrade(contacts[index].as_ref().unwrap()));
+    } else {
+        #[cfg(feature = "physac_debug")]
+        println!("[PHYSAC] new physics manifold creation failed because there is any available id to use");
+    }
+
+    new_weak_manifold
 }
 
 /// Unitializes and destroys a physics manifold
@@ -1973,7 +1984,7 @@ fn get_time_count() -> u64 {
 
 /// Get current time in milliseconds
 fn get_curr_time() -> f64 {
-    (get_time_count() as f64 - unsafe { BASE_TIME })/FREQUENCY.load(atomic::Ordering::Relaxed) as f64*1000.0
+    (get_time_count() as f64 - unsafe { BASE_TIME })/FREQUENCY.load(Relaxed) as f64*1000.0
 }
 
 // Returns the cross product of a vector and a value
