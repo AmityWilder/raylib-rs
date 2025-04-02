@@ -1,7 +1,8 @@
 //! Data manipulation functions. Compress and Decompress with DEFLATE
 use std::{
     ffi::{c_char, CString},
-    path::Path, ptr::NonNull,
+    ops::{Deref, DerefMut},
+    path::Path,
 };
 
 use crate::{
@@ -20,21 +21,43 @@ impl std::fmt::Display for CompressionFailError {
 
 impl std::error::Error for CompressionFailError {}
 
+/// Owned buffer for holding onto memory returned by [`compress_data`] and [`decompress_data`].
+/// Automatically frees the memory when dropped.
+#[derive(Debug)]
 pub struct DataBuf {
-    buffer: NonNull<u8>,
-    len: u32,
+    buffer: *mut u8,
+    len: usize,
 }
-
-impl std::ops::Deref for DataBuf {
-    type Target = [u8];
-    fn deref(&self) -> &Self::Target {
-        unsafe { std::slice::from_raw_parts(self.buffer.as_ptr(), self.len as usize) }
+impl Drop for DataBuf {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::MemFree(self.buffer.cast());
+        }
     }
 }
-
-impl std::ops::DerefMut for DataBuf {
+impl Deref for DataBuf {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        unsafe {
+            std::slice::from_raw_parts(self.buffer, self.len)
+        }
+    }
+}
+impl DerefMut for DataBuf {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { std::slice::from_raw_parts_mut(self.buffer.as_ptr(), self.len as usize) }
+        unsafe {
+            std::slice::from_raw_parts_mut(self.buffer, self.len)
+        }
+    }
+}
+impl AsRef<[u8]> for DataBuf {
+    fn as_ref(&self) -> &[u8] {
+        self.deref()
+    }
+}
+impl AsMut<[u8]> for DataBuf {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.deref_mut()
     }
 }
 
@@ -54,15 +77,15 @@ pub fn compress_data(data: &[u8]) -> Result<DataBuf, CompressionFailError> {
         ffi::CompressData(data.as_ptr() as *mut _, data_len as i32, &mut out_length)
     };
 
-    if let Some(buffer) = NonNull::new(buffer) {
-        assert!(out_length >= 1, "non-null buffer length cannot be zero or negative");
-        Ok(DataBuf {
-            buffer,
-            len: out_length as u32,
-        })
-    } else {
-        Err(CompressionFailError(()))
+    if buffer.is_null() {
+        return Err(CompressionFailError(()));
     }
+
+    assert!(out_length >= 1, "non-null buffer length should never be zero or negative");
+    Ok(DataBuf {
+        buffer,
+        len: out_length as usize,
+    })
 }
 
 /// Decompress data (DEFLATE algorythm)
@@ -74,36 +97,33 @@ pub fn compress_data(data: &[u8]) -> Result<DataBuf, CompressionFailError> {
 /// assert_eq!(data, expected);
 /// ```
 pub fn decompress_data(data: &[u8]) -> Result<DataBuf, CompressionFailError> {
-    #[cfg(debug_assertions)]
-    println!("{:?}", data.len());
-
     let data_len = data.len();
     assert!(data_len <= i32::MAX as usize, "invalid data length");
     let mut out_length: i32 = 0;
     // CompressData doesn't actually modify the data, but the header is wrong
-    let buffer = {
-        unsafe { ffi::DecompressData(data.as_ptr() as *mut _, data_len as i32, &mut out_length) }
+    let buffer = unsafe {
+        ffi::DecompressData(data.as_ptr() as *mut _, data_len as i32, &mut out_length)
     };
-    if let Some(buffer) = NonNull::new(buffer) {
-        assert!(out_length >= 1, "non-null buffer length cannot be zero or negative");
-        Ok(DataBuf {
-            buffer,
-            len: out_length as u32,
-        })
-    } else {
-        Err(CompressionFailError(()))
+
+    if buffer.is_null() {
+        return Err(CompressionFailError(()));
     }
+
+    assert!(out_length >= 1, "non-null buffer length should never be zero or negative");
+    Ok(DataBuf {
+        buffer,
+        len: out_length as usize,
+    })
 }
 
-#[cfg(unix)]
 fn path_to_bytes<P: AsRef<Path>>(path: P) -> Vec<u8> {
-    use std::os::unix::ffi::OsStrExt;
-    path.as_ref().as_os_str().as_bytes().to_vec()
-}
-
-#[cfg(not(unix))]
-fn path_to_bytes<P: AsRef<Path>>(path: P) -> Vec<u8> {
-    path.as_ref().to_string_lossy().to_string().into_bytes()
+    #[cfg(unix)] {
+        use std::os::unix::ffi::OsStrExt;
+        path.as_ref().as_os_str().as_bytes().to_vec()
+    }
+    #[cfg(not(unix))] {
+        path.as_ref().to_string_lossy().to_string().into_bytes()
+    }
 }
 
 /// Export data to code (.h), returns true on success
