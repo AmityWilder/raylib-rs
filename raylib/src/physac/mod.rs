@@ -101,6 +101,7 @@ pub enum PhysicsShapeType {
     Circle,
     Polygon,
 }
+use raylib_sys::DEG2RAD;
 pub use PhysicsShapeType::{
     Circle as PHYSICS_CIRCLE,
     Polygon as PHYSICS_POLYGON,
@@ -275,7 +276,7 @@ impl std::ops::DerefMut for PhysicsManifold {
 *
 ************************************************************************************/
 
-use std::{ffi::c_void, sync::{atomic::{self, AtomicBool}, Arc, LazyLock, RwLock, Weak}};
+use std::{ffi::c_void, sync::{atomic::{self, AtomicBool, AtomicU32, AtomicU64}, Arc, LazyLock, RwLock, Weak}, time::{Duration, Instant}};
 // #[cfg(not(feature = "physac_no_threads"))]
 // use std::thread;
 
@@ -291,14 +292,14 @@ pub const PHYSAC_K: f32 = 1.0/3.0;
 // /// Physics thread id
 // static pthread_t physicsThreadId;
 
-// TODO: Make these thread-safe where possible
-
 /// Total allocated dynamic memory
-static mut USED_MEMORY: u32 = 0;
+static USED_MEMORY: AtomicU32 = AtomicU32::new(0);
 /// Physics thread enabled state
 static PHYSICS_THREAD_ENABLED: AtomicBool = AtomicBool::new(false);
 /// Offset time for MONOTONIC clock
 static mut BASE_TIME: f64 = 0.0;
+/// Start time in milliseconds
+static PHYSAC_EPOCK: LazyLock<Instant> = LazyLock::new(Instant::now);
 /// Start time in milliseconds
 static mut START_TIME: f64 = 0.0;
 /// Delta time used for physics steps, in milliseconds
@@ -306,24 +307,24 @@ static mut DELTA_TIME: f64 = 1.0/60.0/10.0 * 1000.0;
 /// Current time in milliseconds
 static mut CURRENT_TIME: f64 = 0.0;
 /// Hi-res clock frequency
-static mut FREQUENCY: u64 = 0;
+static FREQUENCY: AtomicU64 = AtomicU64::new(0);
 
 /// Physics time step delta time accumulator
 static mut ACCUMULATOR: f64 = 0.0;
 /// Total physics steps processed
-static mut STEPS_COUNT: u32 = 0;
+static STEPS_COUNT: AtomicU32 = AtomicU32::new(0);
 /// Physics world gravity force
 static mut GRAVITY_FORCE: Vector2 = Vector2::new(0.0, 9.81);
 /// Physics bodies pointers array
 static BODIES: LazyLock<Arc<RwLock<[Option<Arc<RwLock<PhysicsBodyData>>>; PHYSAC_MAX_BODIES as usize]>>>
     = LazyLock::new(|| Arc::new(RwLock::new([const { None }; PHYSAC_MAX_BODIES as usize])));
 /// Physics world current bodies counter
-static mut PHYSICS_BODIES_COUNT: u32 = 0;
+static PHYSICS_BODIES_COUNT: AtomicU32 = AtomicU32::new(0);
 /// Physics bodies pointers array
 static CONTACTS: LazyLock<Arc<RwLock<[Option<Arc<RwLock<PhysicsManifoldData>>>; PHYSAC_MAX_MANIFOLDS as usize]>>>
     = LazyLock::new(|| Arc::new(RwLock::new([const { None }; PHYSAC_MAX_MANIFOLDS as usize])));
 /// Physics world current manifolds counter
-static mut PHYSICS_MANIFOLDS_COUNT: u32 = 0;
+static PHYSICS_MANIFOLDS_COUNT: AtomicU32 = AtomicU32::new(0);
 
 //----------------------------------------------------------------------------------
 // Module Functions Definition
@@ -400,12 +401,12 @@ pub fn create_physics_body_circle(pos: Vector2, radius: f32, density: f32) -> Ph
     //     physicsBodiesCount++;
 
     //     #if defined(PHYSAC_DEBUG)
-    //         printf("[PHYSAC] created polygon physics body id %i\n", newBody->id);
+    //         println!("[PHYSAC] created polygon physics body id %i", newBody->id);
     //     #endif
     // }
     // #if defined(PHYSAC_DEBUG)
     //     else
-    //         printf("[PHYSAC] new physics body creation failed because there is any available id to use\n");
+    //         println!("[PHYSAC] new physics body creation failed because there is any available id to use");
     // #endif
 
     // return newBody;
@@ -488,12 +489,12 @@ pub fn create_physics_body_rectangle(pos: Vector2, width: f32, height: f32, dens
     //     physicsBodiesCount++;
 
     //     #if defined(PHYSAC_DEBUG)
-    //         printf("[PHYSAC] created polygon physics body id %i\n", newBody->id);
+    //         println!("[PHYSAC] created polygon physics body id %i", newBody->id);
     //     #endif
     // }
     // #if defined(PHYSAC_DEBUG)
     //     else
-    //         printf("[PHYSAC] new physics body creation failed because there is any available id to use\n");
+    //         println!("[PHYSAC] new physics body creation failed because there is any available id to use");
     // #endif
 
     // return newBody;
@@ -575,12 +576,12 @@ pub fn create_physics_body_polygon(pos: Vector2, radius: f32, sides: i32, densit
     //     physicsBodiesCount++;
 
     //     #if defined(PHYSAC_DEBUG)
-    //         printf("[PHYSAC] created polygon physics body id %i\n", newBody->id);
+    //         println!("[PHYSAC] created polygon physics body id %i", newBody->id);
     //     #endif
     // }
     // #if defined(PHYSAC_DEBUG)
     //     else
-    //         printf("[PHYSAC] new physics body creation failed because there is any available id to use\n");
+    //         println!("[PHYSAC] new physics body creation failed because there is any available id to use");
     // #endif
 
     // return newBody;
@@ -742,13 +743,13 @@ pub fn physics_shatter(body: &mut PhysicsBodyData, position: Vector2, force: f32
     // }
     // #if defined(PHYSAC_DEBUG)
     //     else
-    //         printf("[PHYSAC] error when trying to shatter a null reference physics body");
+    //         println!("[PHYSAC] error when trying to shatter a null reference physics body");
     // #endif
 }
 
 /// Returns the current amount of created physics bodies
 pub fn get_physics_bodies_count() -> u32 {
-    unsafe { PHYSICS_BODIES_COUNT }
+    PHYSICS_BODIES_COUNT.load(atomic::Ordering::Relaxed)
 }
 
 /// Returns a physics body of the bodies pool at a specific index
@@ -759,7 +760,7 @@ pub fn get_physics_bodies_count() -> u32 {
 pub fn get_physics_body(index: u32) -> Option<PhysicsBody> {
     let bodies = BODIES.read().unwrap();
 
-    if index < unsafe { PHYSICS_BODIES_COUNT } {
+    if index < PHYSICS_BODIES_COUNT.load(atomic::Ordering::Relaxed) {
         if bodies[index as usize].is_none() {
             #[cfg(feature = "physac_debug")]
             println!("[PHYSAC] error when trying to get a null reference physics body");
@@ -779,88 +780,81 @@ pub fn get_physics_shape_type(index: u32) -> Option<PhysicsShapeType> {
     let mut result = None;
     let bodies = BODIES.read().unwrap();
 
-    if index < unsafe { PHYSICS_BODIES_COUNT } {
+    if index < PHYSICS_BODIES_COUNT.load(atomic::Ordering::Relaxed) {
         if let Some(body) = bodies[index as usize].as_ref() {
             let body = body.read().unwrap();
             result = Some(body.shape.kind);
         } else {
             #[cfg(feature = "physac_debug")]
-            printf("[PHYSAC] error when trying to get a null reference physics body");
+            println!("[PHYSAC] error when trying to get a null reference physics body");
         }
     } else {
         #[cfg(feature = "physac_debug")]
-        printf("[PHYSAC] physics body index is out of bounds");
+        println!("[PHYSAC] physics body index is out of bounds");
     }
 
     result
 }
 
 /// Returns the amount of vertices of a physics body shape
-pub fn get_physics_shape_vertices_count(index: i32) -> i32 {
-    todo!()
-    // int result = 0;
+pub fn get_physics_shape_vertices_count(index: u32) -> u32 {
+    let mut result = 0;
+    let bodies = BODIES.read().unwrap();
 
-    // if (index < physicsBodiesCount)
-    // {
-    //     if (bodies[index] != NULL)
-    //     {
-    //         switch (bodies[index]->shape.type)
-    //         {
-    //             case PHYSICS_CIRCLE: result = PHYSAC_CIRCLE_VERTICES; break;
-    //             case PHYSICS_POLYGON: result = bodies[index]->shape.vertexData.vertexCount; break;
-    //             default: break;
-    //         }
-    //     }
-    //     #if defined(PHYSAC_DEBUG)
-    //         else
-    //             printf("[PHYSAC] error when trying to get a null reference physics body");
-    //     #endif
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         printf("[PHYSAC] physics body index is out of bounds");
-    // #endif
+    if index < PHYSICS_BODIES_COUNT.load(atomic::Ordering::Relaxed) {
+        if let Some(body) = bodies[index as usize].as_ref() {
+            let body = body.read().unwrap();
+            result = match body.shape.kind {
+                PHYSICS_CIRCLE => PHYSAC_CIRCLE_VERTICES,
+                PHYSICS_POLYGON => body.shape.vertex_data.vertex_count,
+            };
+        } else {
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] error when trying to get a null reference physics body");
+        }
+    } else {
+        #[cfg(feature = "physac_debug")]
+        println!("[PHYSAC] physics body index is out of bounds");
+    }
 
-    // return result;
+    result
 }
 
-/// Returns transformed position of a body shape (body position + vertex transformed position)
-pub fn get_physics_shape_vertex(body: &mut PhysicsBodyData, vertex: i32) -> Vector2 {
-    todo!()
-    // Vector2 position = { 0.0f, 0.0f };
+impl PhysicsBody {
+    /// Returns transformed position of a body shape (body position + vertex transformed position)
+    pub fn get_shape_vertex(&self, vertex: i32) -> Vector2 {
+        let mut position = Vector2 { x: 0.0, y: 0.0 };
 
-    // if (body != NULL)
-    // {
-    //     switch (body->shape.type)
-    //     {
-    //         case PHYSICS_CIRCLE:
-    //         {
-    //             position.x = body->position.x + cosf(360.0f/PHYSAC_CIRCLE_VERTICES*vertex*PHYSAC_DEG2RAD)*body->shape.radius;
-    //             position.y = body->position.y + sinf(360.0f/PHYSAC_CIRCLE_VERTICES*vertex*PHYSAC_DEG2RAD)*body->shape.radius;
-    //         } break;
-    //         case PHYSICS_POLYGON:
-    //         {
-    //             PolygonData vertexData = body->shape.vertexData;
-    //             position = Vector2Add(body->position, Mat2MultiplyVector2(body->shape.transform, vertexData.positions[vertex]));
-    //         } break;
-    //         default: break;
-    //     }
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         printf("[PHYSAC] error when trying to get a null reference physics body");
-    // #endif
+        if let Some(body) = self.upgrade() {
+            let body = body.read().unwrap();
+            match body.shape.kind {
+                PHYSICS_CIRCLE => {
+                    position.x = body.position.x + (360.0/PHYSAC_CIRCLE_VERTICES as f32*vertex as f32*DEG2RAD as f32).cos()*body.shape.radius;
+                    position.y = body.position.y + (360.0/PHYSAC_CIRCLE_VERTICES as f32*vertex as f32*DEG2RAD as f32).sin()*body.shape.radius;
+                }
+                PHYSICS_POLYGON => {
+                    let vertex_data = body.shape.vertex_data;
+                    position = body.position + body.shape.transform.multiply_vector2(vertex_data.positions[vertex as usize]);
+                }
+            }
+        } else {
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] error when trying to get a null reference physics body");
+        }
 
-    // return position;
-}
+        position
+    }
 
-impl PhysicsBodyData {
     /// Sets physics body shape transform based on radians parameter
     pub fn set_rotation(&mut self, radians: f32) {
-        self.orient = radians;
+        if let Some(body) = self.upgrade() {
+            let mut body = body.write().unwrap();
 
-        if self.shape.kind == PHYSICS_POLYGON {
-            self.shape.transform = Mat2::radians(radians);
+            body.orient = radians;
+
+            if body.shape.kind == PHYSICS_POLYGON {
+                body.shape.transform = Mat2::radians(radians);
+            }
         }
     }
 }
@@ -885,7 +879,7 @@ pub fn destroy_physics_body(body: &mut PhysicsBodyData) {
     //     if (index == -1)
     //     {
     //         #if defined(PHYSAC_DEBUG)
-    //             printf("[PHYSAC] Not possible to find body id %i in pointers array\n", id);
+    //             println!("[PHYSAC] Not possible to find body id %i in pointers array", id);
     //         #endif
     //         return;
     //     }
@@ -906,12 +900,12 @@ pub fn destroy_physics_body(body: &mut PhysicsBodyData) {
     //     physicsBodiesCount--;
 
     //     #if defined(PHYSAC_DEBUG)
-    //         printf("[PHYSAC] destroyed physics body id %i\n", id);
+    //         println!("[PHYSAC] destroyed physics body id %i", id);
     //     #endif
     // }
     // #if defined(PHYSAC_DEBUG)
     //     else
-    //         printf("[PHYSAC] error trying to destroy a null referenced body\n");
+    //         println!("[PHYSAC] error trying to destroy a null referenced body");
     // #endif
 }
 
@@ -935,11 +929,11 @@ pub fn close_physics() {
 
     // #if defined(PHYSAC_DEBUG)
     //     if (physicsBodiesCount > 0 || usedMemory != 0)
-    //         printf("[PHYSAC] physics module closed with %i still allocated bodies [MEMORY: %i bytes]\n", physicsBodiesCount, usedMemory);
+    //         println!("[PHYSAC] physics module closed with %i still allocated bodies [MEMORY: %i bytes]", physicsBodiesCount, usedMemory);
     //     else if (physicsManifoldsCount > 0 || usedMemory != 0)
-    //         printf("[PHYSAC] physics module closed with %i still allocated manifolds [MEMORY: %i bytes]\n", physicsManifoldsCount, usedMemory);
+    //         println!("[PHYSAC] physics module closed with %i still allocated manifolds [MEMORY: %i bytes]", physicsManifoldsCount, usedMemory);
     //     else
-    //         printf("[PHYSAC] physics module closed successfully\n");
+    //         println!("[PHYSAC] physics module closed successfully");
     // #endif
 }
 
@@ -1003,52 +997,43 @@ fn create_random_polygon(radius: f32, sides: i32) -> PolygonData {
 
 /// Creates a rectangle polygon shape based on a min and max positions
 fn create_rectangle_polygon(pos: Vector2, size: Vector2) -> PolygonData {
-    todo!()
-    // PolygonData data = { 0 };
-    // data.vertexCount = 4;
+    let mut data = PolygonData::default();
+    data.vertex_count = 4;
 
-    // // Calculate polygon vertices positions
-    // data.positions[0] = (Vector2){ pos.x + size.x/2, pos.y - size.y/2 };
-    // data.positions[1] = (Vector2){ pos.x + size.x/2, pos.y + size.y/2 };
-    // data.positions[2] = (Vector2){ pos.x - size.x/2, pos.y + size.y/2 };
-    // data.positions[3] = (Vector2){ pos.x - size.x/2, pos.y - size.y/2 };
+    // Calculate polygon vertices positions
+    data.positions[0] = Vector2 { x: pos.x + size.x/2.0, y: pos.y - size.y/2.0 };
+    data.positions[1] = Vector2 { x: pos.x + size.x/2.0, y: pos.y + size.y/2.0 };
+    data.positions[2] = Vector2 { x: pos.x - size.x/2.0, y: pos.y + size.y/2.0 };
+    data.positions[3] = Vector2 { x: pos.x - size.x/2.0, y: pos.y - size.y/2.0 };
 
-    // // Calculate polygon faces normals
-    // for (int i = 0; i < data.vertexCount; i++)
-    // {
-    //     int nextIndex = (((i + 1) < data.vertexCount) ? (i + 1) : 0);
-    //     Vector2 face = Vector2Subtract(data.positions[nextIndex], data.positions[i]);
+    // Calculate polygon faces normals
+    for i in 0..data.vertex_count {
+        let next_index = if (i + 1) < data.vertex_count { i + 1 } else { 0 };
+        let face = data.positions[next_index as usize] - data.positions[i as usize];
 
-    //     data.normals[i] = (Vector2){ face.y, -face.x };
-    //     MathNormalize(&data.normals[i]);
-    // }
+        data.normals[i as usize] = Vector2 { x: face.y, y: -face.x };
+        math_normalize(&mut data.normals[i as usize]);
+    }
 
-    // return data;
+    data
 }
 
 /// Physics loop thread function
-fn physics_loop(arg: *mut c_void) -> *mut c_void {
-    todo!()
-    // #if defined(PHYSAC_DEBUG)
-    //     printf("[PHYSAC] physics thread created successfully\n");
-    // #endif
+fn physics_loop() {
+    #[cfg(feature = "physac_debug")]
+    println!("[PHYSAC] physics thread created successfully");
 
-    // // Initialize physics loop thread values
-    // physicsThreadEnabled = true;
+    // Initialize physics loop thread values
+    PHYSICS_THREAD_ENABLED.store(true, atomic::Ordering::Relaxed);
 
-    // // Physics update loop
-    // while (physicsThreadEnabled)
-    // {
-    //     RunPhysicsStep();
+    // Physics update loop
+    while PHYSICS_THREAD_ENABLED.load(atomic::Ordering::Relaxed) {
+        run_physics_step();
 
-    //     struct timespec req = { 0 };
-    //     req.tv_sec = 0;
-    //     req.tv_nsec = PHYSAC_FIXED_TIME*1000*1000;
+        let req = Duration::from_nanos((PHYSAC_FIXED_TIME*1000.0*1000.0) as u64);
 
-    //     nanosleep(&req, NULL);
-    // }
-
-    // return 0;
+        std::thread::sleep(req);
+    }
 }
 
 /// Physics steps calculations (dynamics, collisions and position corrections)
@@ -1202,7 +1187,7 @@ pub fn set_physics_time_step(delta: f64) {
 
 /// Finds a valid index for a new manifold initialization
 fn find_available_manifold_index() -> Option<u32> {
-    let id = unsafe { PHYSICS_MANIFOLDS_COUNT } + 1;
+    let id = PHYSICS_MANIFOLDS_COUNT.load(atomic::Ordering::Relaxed) + 1;
 
     if id >= PHYSAC_MAX_MANIFOLDS {
         return None;
@@ -1239,7 +1224,7 @@ fn create_physics_manifold(a: &Arc<RwLock<PhysicsBodyData>>, b: &Arc<RwLock<Phys
     // }
     // #if defined(PHYSAC_DEBUG)
     //     else
-    //         printf("[PHYSAC] new physics manifold creation failed because there is any available id to use\n");
+    //         println!("[PHYSAC] new physics manifold creation failed because there is any available id to use");
     // #endif
 
     // return newManifold;
@@ -1265,7 +1250,7 @@ fn destroy_physics_manifold(manifold: &mut PhysicsManifoldData) {
     //     if (index == -1)
     //     {
     //         #if defined(PHYSAC_DEBUG)
-    //             printf("[PHYSAC] Not possible to manifold id %i in pointers array\n", id);
+    //             println!("[PHYSAC] Not possible to manifold id %i in pointers array", id);
     //         #endif
     //         return;
     //     }
@@ -1287,7 +1272,7 @@ fn destroy_physics_manifold(manifold: &mut PhysicsManifoldData) {
     // }
     // #if defined(PHYSAC_DEBUG)
     //     else
-    //         printf("[PHYSAC] error trying to destroy a null referenced manifold\n");
+    //         println!("[PHYSAC] error trying to destroy a null referenced manifold");
     // #endif
 }
 
@@ -1983,33 +1968,12 @@ fn init_timer() {
 
 /// Get hi-res MONOTONIC time measure in seconds
 fn get_time_count() -> u64 {
-    todo!()
-    // uint64_t value = 0;
-
-    // #if defined(_WIN32)
-    //     QueryPerformanceCounter((unsigned long long int *) &value);
-    // #endif
-
-    // #if defined(__linux__)
-    //     struct timespec now;
-    //     clock_gettime(CLOCK_MONOTONIC, &now);
-    //     value = (uint64_t)now.tv_sec*(uint64_t)1000000000 + (uint64_t)now.tv_nsec;
-    // #endif
-
-    // #if defined(__APPLE__)
-    //     value = mach_absolute_time();
-    // #endif
-
-    // #if defined(EMSCRIPTEN)
-    //   value = emscripten_get_now();
-    // #endif
-
-    // return value;
+    PHYSAC_EPOCK.elapsed().as_secs()
 }
 
 /// Get current time in milliseconds
 fn get_curr_time() -> f64 {
-    unsafe { (get_time_count() as f64 - BASE_TIME)/FREQUENCY as f64*1000.0 }
+    (get_time_count() as f64 - unsafe { BASE_TIME })/FREQUENCY.load(atomic::Ordering::Relaxed) as f64*1000.0
 }
 
 // Returns the cross product of a vector and a value
