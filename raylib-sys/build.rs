@@ -345,15 +345,16 @@ fn gen_imgui() {
         .compile("rlImGui");
 }
 
+// Physac has a compile error
 fn gen_physac() {
-    // Compile the code and link with cc crate
-    cc::Build::new()
-        .define("PHYSAC_NO_THREADS", "1")
-        .files(vec!["binding/physac_wrapper.c"])
-        .include("binding/Physac")
-        .warnings(false)
-        .extra_warnings(false)
-        .compile("Physac");
+    // // Compile the code and link with cc crate
+    // cc::Build::new()
+    //     .define("PHYSAC_NO_THREADS", "1")
+    //     .files(vec!["binding/physac_wrapper.c"])
+    //     .include("binding/Physac")
+    //     .warnings(false)
+    //     .extra_warnings(false)
+    //     .compile("Physac");
 }
 
 #[cfg(feature = "nobuild")]
