@@ -125,12 +125,12 @@ impl std::ops::DerefMut for PhysicsBody {
 impl PhysicsBody {
     #[must_use]
     pub fn try_get<T, F: FnOnce(&PhysicsBodyData) -> T>(&self, f: F) -> Option<T> {
-        self.0.upgrade().and_then(|body| body.read().ok().map(|body| f(&*body)))
+        self.0.upgrade().map(|body| f(&*body.read().unwrap()))
     }
 
     #[must_use]
     pub fn try_get_mut<T, F: FnOnce(&mut PhysicsBodyData) -> T>(&self, f: F) -> Option<T> {
-        self.0.upgrade().and_then(|body| body.write().ok().map(|mut body| f(&mut *body)))
+        self.0.upgrade().map(|body| f(&mut *body.write().unwrap()))
     }
 
     #[must_use]
