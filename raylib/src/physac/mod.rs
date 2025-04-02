@@ -1337,45 +1337,43 @@ fn solve_physics_manifold(manifold: &mut PhysicsManifoldData) {
 
 /// Solves collision between two circle shape physics bodies
 fn solve_circle_to_circle(manifold: &mut PhysicsManifoldData) {
-    todo!()
-    // PhysicsBody bodyA = manifold->bodyA;
-    // PhysicsBody bodyB = manifold->bodyB;
+    let body_a = manifold.body_a.upgrade();
+    let body_b = manifold.body_b.upgrade();
 
-    // if ((bodyA == NULL) || (bodyB == NULL))
-    //     return;
+    if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
+        let mut body_a = body_a.write().unwrap();
+        let     body_b = body_b.read ().unwrap();
 
-    // // Calculate translational vector, which is normal
-    // Vector2 normal = Vector2Subtract(bodyB->position, bodyA->position);
+        // Calculate translational vector, which is normal
+        let normal = body_b.position - body_a.position;
 
-    // float distSqr = MathLenSqr(normal);
-    // float radius = bodyA->shape.radius + bodyB->shape.radius;
+        let dist_sqr = normal.length_sqr();
+        let radius = body_a.shape.radius + body_b.shape.radius;
 
-    // // Check if circles are not in contact
-    // if (distSqr >= radius*radius)
-    // {
-    //     manifold->contactsCount = 0;
-    //     return;
-    // }
+        // Check if circles are not in contact
+        if dist_sqr >= radius*radius {
+            manifold.contacts_count = 0;
+            return;
+        }
 
-    // float distance = sqrtf(distSqr);
-    // manifold->contactsCount = 1;
+        let distance = dist_sqr.sqrt();
+        manifold.contacts_count = 1;
 
-    // if (distance == 0.0f)
-    // {
-    //     manifold->penetration = bodyA->shape.radius;
-    //     manifold->normal = (Vector2){ 1.0f, 0.0f };
-    //     manifold->contacts[0] = bodyA->position;
-    // }
-    // else
-    // {
-    //     manifold->penetration = radius - distance;
-    //     manifold->normal = (Vector2){ normal.x/distance, normal.y/distance }; // Faster than using MathNormalize() due to sqrt is already performed
-    //     manifold->contacts[0] = (Vector2){ manifold->normal.x*bodyA->shape.radius + bodyA->position.x, manifold->normal.y*bodyA->shape.radius + bodyA->position.y };
-    // }
+        if distance == 0.0 {
+            manifold.penetration = body_a.shape.radius;
+            manifold.normal = Vector2 { x: 1.0, y: 0.0 };
+            manifold.contacts[0] = body_a.position;
+        } else {
+            manifold.penetration = radius - distance;
+            manifold.normal = Vector2 { x: normal.x/distance, y: normal.y/distance }; // Faster than using MathNormalize() due to sqrt is already performed
+            manifold.contacts[0] = Vector2 { x: manifold.normal.x*body_a.shape.radius + body_a.position.x, y: manifold.normal.y*body_a.shape.radius + body_a.position.y };
+        }
 
-    // // Update physics body grounded state if normal direction is down
-    // if (!bodyA->isGrounded)
-    //     bodyA->isGrounded = (manifold->normal.y < 0);
+        // Update physics body grounded state if normal direction is down
+        if !body_a.is_grounded {
+            body_a.is_grounded = manifold.normal.y < 0.0;
+        }
+    }
 }
 
 /// Solves collision between a circle to a polygon shape physics bodies
