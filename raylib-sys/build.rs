@@ -345,18 +345,6 @@ fn gen_imgui() {
         .compile("rlImGui");
 }
 
-// Physac has a compile error
-fn gen_physac() {
-    // // Compile the code and link with cc crate
-    // cc::Build::new()
-    //     .define("PHYSAC_NO_THREADS", "1")
-    //     .files(vec!["binding/physac_wrapper.c"])
-    //     .include("binding/Physac")
-    //     .warnings(false)
-    //     .extra_warnings(false)
-    //     .compile("Physac");
-}
-
 #[cfg(feature = "nobuild")]
 fn link(_platform: Platform, _platform_os: PlatformOS) {}
 
@@ -445,9 +433,6 @@ fn main() {
 
     #[cfg(feature = "imgui")]
     gen_imgui();
-
-    #[cfg(feature = "physac")]
-    gen_physac();
 }
 
 #[cfg(feature = "nobuild")]
@@ -478,9 +463,6 @@ fn main() {
 
     #[cfg(feature = "imgui")]
     gen_imgui();
-
-    #[cfg(feature = "physac")]
-    gen_physac();
 }
 
 #[must_use]
