@@ -240,6 +240,8 @@ pub struct PhysicsManifoldData {
     pub static_friction: f32,
 }
 
+// TODO: Figure out how to make sure Strong references are never stored outside of Physac so that Physac can reliably do physics without panicking because a borrow is being held for too long
+
 pub mod rc {
     use super::*;
 
@@ -267,7 +269,7 @@ pub mod rc {
     }
 
     #[derive(Debug, Clone)]
-    pub(super) struct StrongPhysicsBody(Arc<RwLock<PhysicsBodyData>>);
+    pub struct StrongPhysicsBody(Arc<RwLock<PhysicsBodyData>>);
     impl StrongPhysicsBody {
         pub(super) fn new(data: PhysicsBodyData) -> Self {
             Self(Arc::new(RwLock::new(data)))
@@ -299,13 +301,13 @@ pub mod rc {
         }
 
         /// Try to get a strong body from a weak one
-        pub(super) fn upgrade(&self) -> Option<StrongPhysicsBody> {
+        pub fn upgrade(&self) -> Option<StrongPhysicsBody> {
             self.0.upgrade().map(|body| StrongPhysicsBody(body))
         }
     }
 
     #[derive(Debug, Clone)]
-    pub(super) struct StrongPhysicsManifold(Arc<RwLock<PhysicsManifoldData>>);
+    pub struct StrongPhysicsManifold(Arc<RwLock<PhysicsManifoldData>>);
     impl StrongPhysicsManifold {
         pub(super) fn new(data: PhysicsManifoldData) -> Self {
             Self(Arc::new(RwLock::new(data)))
@@ -336,7 +338,7 @@ pub mod rc {
         }
 
         /// Try to get a strong manifold from a weak one
-        pub(super) fn upgrade(&self) -> Option<StrongPhysicsManifold> {
+        pub fn upgrade(&self) -> Option<StrongPhysicsManifold> {
             self.0.upgrade().map(|contact| StrongPhysicsManifold(contact))
         }
     }
@@ -648,7 +650,7 @@ pub fn create_physics_body_polygon(pos: Vector2, radius: f32, sides: u32, densit
         BODIES.write().unwrap()[PHYSICS_BODIES_COUNT.fetch_add(1, Relaxed) as usize] = Some(new_body);
 
         #[cfg(feature = "physac_debug")]
-        println!("[PHYSAC] created polygon physics body id {}", new_body->id);
+        println!("[PHYSAC] created polygon physics body id {}", new_body.id);
     } else {
         #[cfg(feature = "physac_debug")]
         println!("[PHYSAC] new physics body creation failed because there is any available id to use");
