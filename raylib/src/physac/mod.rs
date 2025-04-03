@@ -101,6 +101,7 @@ pub enum PhysicsShapeType {
     Circle,
     Polygon,
 }
+use std::f32::consts::PI;
 use raylib_sys::DEG2RAD;
 pub use PhysicsShapeType::{
     Circle as PHYSICS_CIRCLE,
@@ -320,8 +321,6 @@ pub const PHYSAC_K: f32 = 1.0/3.0;
 // /// Physics thread id
 // static pthread_t physicsThreadId;
 
-/// Total allocated dynamic memory
-static USED_MEMORY: AtomicU32 = AtomicU32::new(0);
 /// Physics thread enabled state
 static PHYSICS_THREAD_ENABLED: AtomicBool = AtomicBool::new(false);
 /// Offset time for MONOTONIC clock
@@ -385,230 +384,226 @@ pub fn set_physics_gravity(x: f32, y: f32) {
     }
 }
 
-/// Creates a new circle physics body with generic parameters
-pub fn create_physics_body_circle(pos: Vector2, radius: f32, density: f32) -> PhysicsBody {
-    todo!()
-    // PhysicsBody newBody = (PhysicsBody)PHYSAC_MALLOC(sizeof(PhysicsBodyData));
-    // usedMemory += sizeof(PhysicsBodyData);
+impl PhysicsBody {
+    /// Creates a new circle physics body with generic parameters
+    pub fn create_circle(pos: Vector2, radius: f32, density: f32) -> PhysicsBody {
+        let mut new_weak_body = PhysicsBody(Weak::new());
+        let new_body = Arc::new(RwLock::new(PhysicsBodyData::default()));
 
-    // int newId = FindAvailableBodyIndex();
-    // if (newId != -1)
-    // {
-    //     // Initialize new body with generic values
-    //     newBody->id = newId;
-    //     newBody->enabled = true;
-    //     newBody->position = pos;
-    //     newBody->velocity = PHYSAC_VECTOR_ZERO;
-    //     newBody->force = PHYSAC_VECTOR_ZERO;
-    //     newBody->angularVelocity = 0.0f;
-    //     newBody->torque = 0.0f;
-    //     newBody->orient = 0.0f;
-    //     newBody->shape.type = PHYSICS_CIRCLE;
-    //     newBody->shape.body = newBody;
-    //     newBody->shape.radius = radius;
-    //     newBody->shape.transform = Mat2Radians(0.0f);
-    //     newBody->shape.vertexData = (PolygonData) { 0 };
+        if let Some(new_id) = find_available_body_index() {
+            new_weak_body = PhysicsBody(Arc::downgrade(&new_body));
+            let mut new_body_data = new_body.write().unwrap();
 
-    //     newBody->mass = PHYSAC_PI*radius*radius*density;
-    //     newBody->inverseMass = ((newBody->mass != 0.0f) ? 1.0f/newBody->mass : 0.0f);
-    //     newBody->inertia = newBody->mass*radius*radius;
-    //     newBody->inverseInertia = ((newBody->inertia != 0.0f) ? 1.0f/newBody->inertia : 0.0f);
-    //     newBody->staticFriction = 0.4f;
-    //     newBody->dynamicFriction = 0.2f;
-    //     newBody->restitution = 0.0f;
-    //     newBody->useGravity = true;
-    //     newBody->isGrounded = false;
-    //     newBody->freezeOrient = false;
+            // Initialize new body with generic values
+            new_body_data.id = new_id;
+            new_body_data.enabled = true;
+            new_body_data.position = pos;
+            new_body_data.velocity = Vector2::zero();
+            new_body_data.force = Vector2::zero();
+            new_body_data.angular_velocity = 0.0;
+            new_body_data.torque = 0.0;
+            new_body_data.orient = 0.0;
+            new_body_data.shape.kind = PHYSICS_CIRCLE;
+            new_body_data.shape.body = new_weak_body.clone();
+            new_body_data.shape.radius = radius;
+            new_body_data.shape.transform = Mat2::radians(0.0);
+            new_body_data.shape.vertex_data = PolygonData::default();
 
-    //     // Add new body to bodies pointers array and update bodies count
-    //     bodies[physicsBodiesCount] = newBody;
-    //     physicsBodiesCount++;
+            new_body_data.mass = PI*radius*radius*density;
+            new_body_data.inverse_mass = if new_body_data.mass != 0.0 { 1.0/new_body_data.mass } else { 0.0 };
+            new_body_data.inertia = new_body_data.mass*radius*radius;
+            new_body_data.inverse_inertia = if new_body_data.inertia != 0.0 { 1.0/new_body_data.inertia } else { 0.0 };
+            new_body_data.static_friction = 0.4;
+            new_body_data.dynamic_friction = 0.2;
+            new_body_data.restitution = 0.0;
+            new_body_data.use_gravity = true;
+            new_body_data.is_grounded = false;
+            new_body_data.freeze_orient = false;
 
-    //     #if defined(PHYSAC_DEBUG)
-    //         println!("[PHYSAC] created polygon physics body id {}", newBody->id);
-    //     #endif
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         println!("[PHYSAC] new physics body creation failed because there is any available id to use");
-    // #endif
+            drop(new_body_data);
 
-    // return newBody;
+            // Add new body to bodies pointers array and update bodies count
+            BODIES.write().unwrap()[PHYSICS_BODIES_COUNT.fetch_add(1, Relaxed) as usize] = Some(new_body);
+
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] created polygon physics body id {}", new_body.id);
+        } else {
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] new physics body creation failed because there is any available id to use");
+        }
+
+        new_weak_body
+    }
 }
 
 /// Creates a new rectangle physics body with generic parameters
 pub fn create_physics_body_rectangle(pos: Vector2, width: f32, height: f32, density: f32) -> PhysicsBody {
-    todo!()
-    // PhysicsBody newBody = (PhysicsBody)PHYSAC_MALLOC(sizeof(PhysicsBodyData));
-    // usedMemory += sizeof(PhysicsBodyData);
+    let mut new_weak_body = PhysicsBody(Weak::new());
+    let new_body = Arc::new(RwLock::new(PhysicsBodyData::default()));
 
-    // int newId = FindAvailableBodyIndex();
-    // if (newId != -1)
-    // {
-    //     // Initialize new body with generic values
-    //     newBody->id = newId;
-    //     newBody->enabled = true;
-    //     newBody->position = pos;
-    //     newBody->velocity = (Vector2){ 0.0f };
-    //     newBody->force = (Vector2){ 0.0f };
-    //     newBody->angularVelocity = 0.0f;
-    //     newBody->torque = 0.0f;
-    //     newBody->orient = 0.0f;
-    //     newBody->shape.type = PHYSICS_POLYGON;
-    //     newBody->shape.body = newBody;
-    //     newBody->shape.radius = 0.0f;
-    //     newBody->shape.transform = Mat2Radians(0.0f);
-    //     newBody->shape.vertexData = CreateRectanglePolygon(pos, (Vector2){ width, height });
+    if let Some(new_id) = find_available_body_index() {
+        new_weak_body = PhysicsBody(Arc::downgrade(&new_body));
+        let mut new_body_data = new_body.write().unwrap();
 
-    //     // Calculate centroid and moment of inertia
-    //     Vector2 center = { 0.0f, 0.0f };
-    //     float area = 0.0f;
-    //     float inertia = 0.0f;
+        // Initialize new body with generic values
+        new_body_data.id = new_id;
+        new_body_data.enabled = true;
+        new_body_data.position = pos;
+        new_body_data.velocity = Vector2::zero();
+        new_body_data.force = Vector2::zero();
+        new_body_data.angular_velocity = 0.0;
+        new_body_data.torque = 0.0;
+        new_body_data.orient = 0.0;
+        new_body_data.shape.kind = PHYSICS_POLYGON;
+        new_body_data.shape.body = new_weak_body.clone();
+        new_body_data.shape.radius = 0.0;
+        new_body_data.shape.transform = Mat2::radians(0.0);
+        new_body_data.shape.vertex_data = create_rectangle_polygon(pos, Vector2 { x: width, y: height });
 
-    //     for (int i = 0; i < newBody->shape.vertexData.vertexCount; i++)
-    //     {
-    //         // Triangle vertices, third vertex implied as (0, 0)
-    //         Vector2 p1 = newBody->shape.vertexData.positions[i];
-    //         int nextIndex = (((i + 1) < newBody->shape.vertexData.vertexCount) ? (i + 1) : 0);
-    //         Vector2 p2 = newBody->shape.vertexData.positions[nextIndex];
+        // Calculate centroid and moment of inertia
+        let mut center = Vector2 { x: 0.0, y: 0.0 };
+        let mut area = 0.0;
+        let mut inertia = 0.0;
 
-    //         float D = MathCrossVector2(p1, p2);
-    //         float triangleArea = D/2;
+        for i in 0..new_body_data.shape.vertex_data.vertex_count {
+            // Triangle vertices, third vertex implied as (0, 0)
+            let p1 = new_body_data.shape.vertex_data.positions[i as usize];
+            let next_index = if (i + 1) < new_body_data.shape.vertex_data.vertex_count { i + 1 } else { 0 };
+            let p2 = new_body_data.shape.vertex_data.positions[next_index as usize];
 
-    //         area += triangleArea;
+            #[allow(non_snake_case)]
+            let D = math_cross_vector2(p1, p2);
+            let triangle_area = D/2.0;
 
-    //         // Use area to weight the centroid average, not just vertex position
-    //         center.x += triangleArea*PHYSAC_K*(p1.x + p2.x);
-    //         center.y += triangleArea*PHYSAC_K*(p1.y + p2.y);
+            area += triangle_area;
 
-    //         float intx2 = p1.x*p1.x + p2.x*p1.x + p2.x*p2.x;
-    //         float inty2 = p1.y*p1.y + p2.y*p1.y + p2.y*p2.y;
-    //         inertia += (0.25f*PHYSAC_K*D)*(intx2 + inty2);
-    //     }
+            // Use area to weight the centroid average, not just vertex position
+            center.x += triangle_area*PHYSAC_K*(p1.x + p2.x);
+            center.y += triangle_area*PHYSAC_K*(p1.y + p2.y);
 
-    //     center.x *= 1.0f/area;
-    //     center.y *= 1.0f/area;
+            let intx2 = p1.x*p1.x + p2.x*p1.x + p2.x*p2.x;
+            let inty2 = p1.y*p1.y + p2.y*p1.y + p2.y*p2.y;
+            inertia += (0.25*PHYSAC_K*D)*(intx2 + inty2);
+        }
 
-    //     // Translate vertices to centroid (make the centroid (0, 0) for the polygon in model space)
-    //     // Note: this is not really necessary
-    //     for (int i = 0; i < newBody->shape.vertexData.vertexCount; i++)
-    //     {
-    //         newBody->shape.vertexData.positions[i].x -= center.x;
-    //         newBody->shape.vertexData.positions[i].y -= center.y;
-    //     }
+        center.x *= 1.0/area;
+        center.y *= 1.0/area;
 
-    //     newBody->mass = density*area;
-    //     newBody->inverseMass = ((newBody->mass != 0.0f) ? 1.0f/newBody->mass : 0.0f);
-    //     newBody->inertia = density*inertia;
-    //     newBody->inverseInertia = ((newBody->inertia != 0.0f) ? 1.0f/newBody->inertia : 0.0f);
-    //     newBody->staticFriction = 0.4f;
-    //     newBody->dynamicFriction = 0.2f;
-    //     newBody->restitution = 0.0f;
-    //     newBody->useGravity = true;
-    //     newBody->isGrounded = false;
-    //     newBody->freezeOrient = false;
+        // Translate vertices to centroid (make the centroid (0, 0) for the polygon in model space)
+        // Note: this is not really necessary
+        for i in 0..new_body_data.shape.vertex_data.vertex_count {
+            new_body_data.shape.vertex_data.positions[i as usize].x -= center.x;
+            new_body_data.shape.vertex_data.positions[i as usize].y -= center.y;
+        }
 
-    //     // Add new body to bodies pointers array and update bodies count
-    //     bodies[physicsBodiesCount] = newBody;
-    //     physicsBodiesCount++;
+        new_body_data.mass = density*area;
+        new_body_data.inverse_mass = if new_body_data.mass != 0.0 { 1.0/new_body_data.mass } else { 0.0 };
+        new_body_data.inertia = density*inertia;
+        new_body_data.inverse_inertia = if new_body_data.inertia != 0.0 { 1.0/new_body_data.inertia } else { 0.0 };
+        new_body_data.static_friction = 0.4;
+        new_body_data.dynamic_friction = 0.2;
+        new_body_data.restitution = 0.0;
+        new_body_data.use_gravity = true;
+        new_body_data.is_grounded = false;
+        new_body_data.freeze_orient = false;
 
-    //     #if defined(PHYSAC_DEBUG)
-    //         println!("[PHYSAC] created polygon physics body id {}", newBody->id);
-    //     #endif
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         println!("[PHYSAC] new physics body creation failed because there is any available id to use");
-    // #endif
+        drop(new_body_data);
 
-    // return newBody;
+        // Add new body to bodies pointers array and update bodies count
+        BODIES.write().unwrap()[PHYSICS_BODIES_COUNT.fetch_add(1, Relaxed) as usize] = Some(new_body);
+
+        #[cfg(feature = "physac_debug")]
+        println!("[PHYSAC] created polygon physics body id {}", new_body.id);
+    } else {
+        #[cfg(feature = "physac_debug")]
+        println!("[PHYSAC] new physics body creation failed because there is any available id to use");
+    }
+
+    new_weak_body
 }
 
 /// Creates a new polygon physics body with generic parameters
-pub fn create_physics_body_polygon(pos: Vector2, radius: f32, sides: i32, density: f32) -> PhysicsBody {
-    todo!()
-    // PhysicsBody newBody = (PhysicsBody)PHYSAC_MALLOC(sizeof(PhysicsBodyData));
-    // usedMemory += sizeof(PhysicsBodyData);
+pub fn create_physics_body_polygon(pos: Vector2, radius: f32, sides: u32, density: f32) -> PhysicsBody {
+    let mut new_weak_body = PhysicsBody(Weak::new());
+    let new_body = Arc::new(RwLock::new(PhysicsBodyData::default()));
 
-    // int newId = FindAvailableBodyIndex();
-    // if (newId != -1)
-    // {
-    //     // Initialize new body with generic values
-    //     newBody->id = newId;
-    //     newBody->enabled = true;
-    //     newBody->position = pos;
-    //     newBody->velocity = PHYSAC_VECTOR_ZERO;
-    //     newBody->force = PHYSAC_VECTOR_ZERO;
-    //     newBody->angularVelocity = 0.0f;
-    //     newBody->torque = 0.0f;
-    //     newBody->orient = 0.0f;
-    //     newBody->shape.type = PHYSICS_POLYGON;
-    //     newBody->shape.body = newBody;
-    //     newBody->shape.transform = Mat2Radians(0.0f);
-    //     newBody->shape.vertexData = CreateRandomPolygon(radius, sides);
+    if let Some(new_id) = find_available_body_index() {
+        new_weak_body = PhysicsBody(Arc::downgrade(&new_body));
+        let mut new_body_data = new_body.write().unwrap();
 
-    //     // Calculate centroid and moment of inertia
-    //     Vector2 center = { 0.0f, 0.0f };
-    //     float area = 0.0f;
-    //     float inertia = 0.0f;
+        // Initialize new body with generic values
+        new_body_data.id = new_id;
+        new_body_data.enabled = true;
+        new_body_data.position = pos;
+        new_body_data.velocity = Vector2::zero();
+        new_body_data.force = Vector2::zero();
+        new_body_data.angular_velocity = 0.0;
+        new_body_data.torque = 0.0;
+        new_body_data.orient = 0.0;
+        new_body_data.shape.kind = PHYSICS_POLYGON;
+        new_body_data.shape.body = new_weak_body.clone();
+        new_body_data.shape.transform = Mat2::radians(0.0);
+        new_body_data.shape.vertex_data = create_random_polygon(radius, sides);
 
-    //     for (int i = 0; i < newBody->shape.vertexData.vertexCount; i++)
-    //     {
-    //         // Triangle vertices, third vertex implied as (0, 0)
-    //         Vector2 position1 = newBody->shape.vertexData.positions[i];
-    //         int nextIndex = (((i + 1) < newBody->shape.vertexData.vertexCount) ? (i + 1) : 0);
-    //         Vector2 position2 = newBody->shape.vertexData.positions[nextIndex];
+        // Calculate centroid and moment of inertia
+        let mut center = Vector2 { x: 0.0, y: 0.0 };
+        let mut area = 0.0;
+        let mut inertia = 0.0;
 
-    //         float cross = MathCrossVector2(position1, position2);
-    //         float triangleArea = cross/2;
+        for i in 0..new_body_data.shape.vertex_data.vertex_count {
+            // Triangle vertices, third vertex implied as (0, 0)
+            let position1 = new_body_data.shape.vertex_data.positions[i as usize];
+            let next_index = if (i + 1) < new_body_data.shape.vertex_data.vertex_count { i + 1 } else { 0 };
+            let position2 = new_body_data.shape.vertex_data.positions[next_index as usize];
 
-    //         area += triangleArea;
+            let cross = math_cross_vector2(position1, position2);
+            let triangle_area = cross/2.0;
 
-    //         // Use area to weight the centroid average, not just vertex position
-    //         center.x += triangleArea*PHYSAC_K*(position1.x + position2.x);
-    //         center.y += triangleArea*PHYSAC_K*(position1.y + position2.y);
+            area += triangle_area;
 
-    //         float intx2 = position1.x*position1.x + position2.x*position1.x + position2.x*position2.x;
-    //         float inty2 = position1.y*position1.y + position2.y*position1.y + position2.y*position2.y;
-    //         inertia += (0.25f*PHYSAC_K*cross)*(intx2 + inty2);
-    //     }
+            // Use area to weight the centroid average, not just vertex position
+            center.x += triangle_area*PHYSAC_K*(position1.x + position2.x);
+            center.y += triangle_area*PHYSAC_K*(position1.y + position2.y);
 
-    //     center.x *= 1.0f/area;
-    //     center.y *= 1.0f/area;
+            let intx2 = position1.x*position1.x + position2.x*position1.x + position2.x*position2.x;
+            let inty2 = position1.y*position1.y + position2.y*position1.y + position2.y*position2.y;
+            inertia += (0.25*PHYSAC_K*cross)*(intx2 + inty2);
+        }
 
-    //     // Translate vertices to centroid (make the centroid (0, 0) for the polygon in model space)
-    //     // Note: this is not really necessary
-    //     for (int i = 0; i < newBody->shape.vertexData.vertexCount; i++)
-    //     {
-    //         newBody->shape.vertexData.positions[i].x -= center.x;
-    //         newBody->shape.vertexData.positions[i].y -= center.y;
-    //     }
+        center.x *= 1.0/area;
+        center.y *= 1.0/area;
 
-    //     newBody->mass = density*area;
-    //     newBody->inverseMass = ((newBody->mass != 0.0f) ? 1.0f/newBody->mass : 0.0f);
-    //     newBody->inertia = density*inertia;
-    //     newBody->inverseInertia = ((newBody->inertia != 0.0f) ? 1.0f/newBody->inertia : 0.0f);
-    //     newBody->staticFriction = 0.4f;
-    //     newBody->dynamicFriction = 0.2f;
-    //     newBody->restitution = 0.0f;
-    //     newBody->useGravity = true;
-    //     newBody->isGrounded = false;
-    //     newBody->freezeOrient = false;
+        // Translate vertices to centroid (make the centroid (0, 0) for the polygon in model space)
+        // Note: this is not really necessary
+        for i in 0..new_body_data.shape.vertex_data.vertex_count {
+            new_body_data.shape.vertex_data.positions[i as usize].x -= center.x;
+            new_body_data.shape.vertex_data.positions[i as usize].y -= center.y;
+        }
 
-    //     // Add new body to bodies pointers array and update bodies count
-    //     bodies[physicsBodiesCount] = newBody;
-    //     physicsBodiesCount++;
+        new_body_data.mass = density*area;
+        new_body_data.inverse_mass = if new_body_data.mass != 0.0 { 1.0/new_body_data.mass } else { 0.0 };
+        new_body_data.inertia = density*inertia;
+        new_body_data.inverse_inertia = if new_body_data.inertia != 0.0 { 1.0/new_body_data.inertia } else { 0.0 };
+        new_body_data.static_friction = 0.4;
+        new_body_data.dynamic_friction = 0.2;
+        new_body_data.restitution = 0.0;
+        new_body_data.use_gravity = true;
+        new_body_data.is_grounded = false;
+        new_body_data.freeze_orient = false;
 
-    //     #if defined(PHYSAC_DEBUG)
-    //         println!("[PHYSAC] created polygon physics body id {}", newBody->id);
-    //     #endif
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         println!("[PHYSAC] new physics body creation failed because there is any available id to use");
-    // #endif
+        drop(new_body_data);
 
-    // return newBody;
+        // Add new body to bodies pointers array and update bodies count
+        BODIES.write().unwrap()[PHYSICS_BODIES_COUNT.fetch_add(1, Relaxed) as usize] = Some(new_body);
+
+        #[cfg(feature = "physac_debug")]
+        println!("[PHYSAC] created polygon physics body id {}", new_body->id);
+    } else {
+        #[cfg(feature = "physac_debug")]
+        println!("[PHYSAC] new physics body creation failed because there is any available id to use");
+    }
+
+    new_weak_body
 }
 
 impl PhysicsBody {
@@ -883,54 +878,51 @@ impl PhysicsBody {
     }
 }
 
-/// Unitializes and destroys a physics body
-pub fn destroy_physics_body(body: &mut PhysicsBodyData) {
-    todo!()
-    // if (body != NULL)
-    // {
-    //     int id = body->id;
-    //     int index = -1;
+impl PhysicsBody {
+    /// Unitializes and destroys a physics body
+    pub fn destroy(&mut self) {
+        if let Some(body) = self.upgrade() {
+            let id = body.read().unwrap().id;
+            let mut index = None;
 
-    //     for (int i = 0; i < physicsBodiesCount; i++)
-    //     {
-    //         if (bodies[i]->id == id)
-    //         {
-    //             index = i;
-    //             break;
-    //         }
-    //     }
+            let mut bodies = BODIES.write().unwrap();
 
-    //     if (index == -1)
-    //     {
-    //         #if defined(PHYSAC_DEBUG)
-    //             println!("[PHYSAC] Not possible to find body id {} in pointers array", id);
-    //         #endif
-    //         return;
-    //     }
+            for i in 0..PHYSICS_BODIES_COUNT.load(Relaxed) {
+                let body = bodies[i as usize].as_ref().unwrap();
+                if body.read().unwrap().id == id {
+                    index = Some(i);
+                    break;
+                }
+            }
 
-    //     // Free body allocated memory
-    //     PHYSAC_FREE(body);
-    //     usedMemory -= sizeof(PhysicsBodyData);
-    //     bodies[index] = NULL;
+            if index.is_none() {
+                #[cfg(feature = "physac_debug")]
+                println!("[PHYSAC] Not possible to find body id {} in pointers array", id);
+                return;
+            }
+            let index = index.unwrap();
 
-    //     // Reorder physics bodies pointers array and its catched index
-    //     for (int i = index; i < physicsBodiesCount; i++)
-    //     {
-    //         if ((i + 1) < physicsBodiesCount)
-    //             bodies[i] = bodies[i + 1];
-    //     }
+            // Free body allocated memory
+            drop(body);
+            bodies[index as usize] = None;
 
-    //     // Update physics bodies count
-    //     physicsBodiesCount--;
+            // Reorder physics bodies pointers array and its catched index
+            for i in index..PHYSICS_BODIES_COUNT.load(Relaxed) {
+                if let ([.., curr], [next, ..]) = bodies.split_at_mut(i as usize) {
+                    std::mem::swap(curr, next);
+                }
+            }
 
-    //     #if defined(PHYSAC_DEBUG)
-    //         println!("[PHYSAC] destroyed physics body id {}", id);
-    //     #endif
-    // }
-    // #if defined(PHYSAC_DEBUG)
-    //     else
-    //         println!("[PHYSAC] error trying to destroy a null referenced body");
-    // #endif
+            // Update physics bodies count
+            PHYSICS_BODIES_COUNT.store(PHYSICS_BODIES_COUNT.load(Relaxed) - 1, Relaxed);
+
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] destroyed physics body id {}", id);
+        } else {
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] error trying to destroy a null referenced body");
+        }
+    }
 }
 
 /// Unitializes physics pointers and exits physics loop thread
@@ -1215,573 +1207,583 @@ fn find_available_manifold_index() -> Option<u32> {
     Some(id)
 }
 
-/// Creates a new physics manifold to solve collision
-fn create_physics_manifold(a: &PhysicsBody, b: &PhysicsBody) -> PhysicsManifold {
-    let mut new_weak_manifold = PhysicsManifold(Weak::new());
-    let mut new_manifold = Arc::new(RwLock::new(PhysicsManifoldData::default()));
-    USED_MEMORY.store(USED_MEMORY.load(Relaxed) + std::mem::size_of::<PhysicsManifoldData>() as u32, Relaxed); // TODO: `USED_MEMORY` doesn't represent anything meaningful in this implementation...
+impl PhysicsManifold {
+    /// Creates a new physics manifold to solve collision
+    fn create(a: &PhysicsBody, b: &PhysicsBody) -> PhysicsManifold {
+        let mut new_weak_manifold = PhysicsManifold(Weak::new());
+        let new_manifold = Arc::new(RwLock::new(PhysicsManifoldData::default()));
 
-    if let Some(new_id) = find_available_manifold_index() {
-        // unwraps are safe here because there is no way something else has a reference to the arc we JUST created locally
-        let new_manifold_data = Arc::get_mut(&mut new_manifold).unwrap().get_mut().unwrap();
+        if let Some(new_id) = find_available_manifold_index() {
+            new_weak_manifold = PhysicsManifold(Arc::downgrade(&new_manifold));
+            // unwraps are safe here because there is no way something else has a reference to the arc we JUST created locally
+            let mut new_manifold_data = new_manifold.write().unwrap();
 
-        // Initialize new manifold with generic values
-        new_manifold_data.id = new_id;
-        new_manifold_data.body_a = a.clone();
-        new_manifold_data.body_b = b.clone();
-        new_manifold_data.penetration = 0.0;
-        new_manifold_data.normal = Vector2::zero();
-        new_manifold_data.contacts[0] = Vector2::zero();
-        new_manifold_data.contacts[1] = Vector2::zero();
-        new_manifold_data.contacts_count = 0;
-        new_manifold_data.restitution = 0.0;
-        new_manifold_data.dynamic_friction = 0.0;
-        new_manifold_data.static_friction = 0.0;
+            // Initialize new manifold with generic values
+            new_manifold_data.id = new_id;
+            new_manifold_data.body_a = a.clone();
+            new_manifold_data.body_b = b.clone();
+            new_manifold_data.penetration = 0.0;
+            new_manifold_data.normal = Vector2::zero();
+            new_manifold_data.contacts[0] = Vector2::zero();
+            new_manifold_data.contacts[1] = Vector2::zero();
+            new_manifold_data.contacts_count = 0;
+            new_manifold_data.restitution = 0.0;
+            new_manifold_data.dynamic_friction = 0.0;
+            new_manifold_data.static_friction = 0.0;
 
-        // Add new body to bodies pointers array and update bodies count
-        let index = PHYSICS_MANIFOLDS_COUNT.fetch_add(1, Relaxed) as usize;
-        let mut contacts = CONTACTS.write().unwrap();
-        contacts[index] = Some(new_manifold);
-        new_weak_manifold = PhysicsManifold(Arc::downgrade(contacts[index].as_ref().unwrap()));
-    } else {
-        #[cfg(feature = "physac_debug")]
-        println!("[PHYSAC] new physics manifold creation failed because there is any available id to use");
-    }
+            drop(new_manifold_data);
 
-    new_weak_manifold
-}
-
-/// Unitializes and destroys a physics manifold
-fn destroy_physics_manifold(manifold: PhysicsManifold) {
-    if let Some(manifold) = manifold.upgrade() {
-        let mut contacts = CONTACTS.write().unwrap();
-
-        let id = manifold.read().unwrap().id;
-        let mut index = None;
-
-        for i in 0..PHYSICS_MANIFOLDS_COUNT.load(Relaxed) {
-            let contact = contacts[i as usize].as_ref().unwrap();
-            if contact.read().unwrap().id == id {
-                index = Some(i);
-                break;
-            }
-        }
-
-        if index.is_none() {
-            #[cfg(feature = "physac_debug")]
-            println!("[PHYSAC] Not possible to manifold id {} in pointers array", id);
-            return;
-        }
-        let index = index.unwrap();
-
-        // Free manifold allocated memory
-        drop(manifold);
-        USED_MEMORY.fetch_sub(std::mem::size_of::<PhysicsManifoldData>() as u32, Relaxed);
-        contacts[index as usize] = None;
-
-        // Reorder physics manifolds pointers array and its catched index
-        for i in index..PHYSICS_MANIFOLDS_COUNT.load(Relaxed) {
-            if let ([.., curr], [next, ..]) = contacts.split_at_mut(i as usize) {
-                std::mem::swap(curr, next);
-            }
-        }
-
-        // Update physics manifolds count
-        PHYSICS_MANIFOLDS_COUNT.store(PHYSICS_MANIFOLDS_COUNT.load(Relaxed) - 1, Relaxed);
-    } else {
-        #[cfg(feature = "physac_debug")]
-        println!("[PHYSAC] error trying to destroy a null referenced manifold");
-    }
-}
-
-/// Solves a created physics manifold between two physics bodies
-fn solve_physics_manifold(manifold: &mut PhysicsManifoldData) {
-    // The C version doesn't check these so...
-    let body_a = manifold.body_a.upgrade().unwrap();
-    let body_b = manifold.body_b.upgrade().unwrap();
-
-    let     body_a = body_a.read ().unwrap();
-    let mut body_b = body_b.write().unwrap();
-
-    match body_a.shape.kind {
-        PHYSICS_CIRCLE => {
-            match body_b.shape.kind {
-                PHYSICS_CIRCLE => solve_circle_to_circle(manifold),
-                PHYSICS_POLYGON => solve_circle_to_polygon(manifold),
-            }
-        }
-        PHYSICS_POLYGON => {
-            match body_b.shape.kind {
-                PHYSICS_CIRCLE => solve_polygon_to_circle(manifold),
-                PHYSICS_POLYGON => solve_polygon_to_polygon(manifold),
-            }
-        }
-    }
-
-    // Update physics body grounded state if normal direction is down and grounded state is not set yet in previous manifolds
-    if !body_b.is_grounded {
-        body_b.is_grounded = manifold.normal.y < 0.0;
-    }
-}
-
-/// Solves collision between two circle shape physics bodies
-fn solve_circle_to_circle(manifold: &mut PhysicsManifoldData) {
-    let body_a = manifold.body_a.upgrade();
-    let body_b = manifold.body_b.upgrade();
-
-    if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
-        let mut body_a = body_a.write().unwrap();
-        let     body_b = body_b.read ().unwrap();
-
-        // Calculate translational vector, which is normal
-        let normal = body_b.position - body_a.position;
-
-        let dist_sqr = normal.length_sqr();
-        let radius = body_a.shape.radius + body_b.shape.radius;
-
-        // Check if circles are not in contact
-        if dist_sqr >= radius*radius {
-            manifold.contacts_count = 0;
-            return;
-        }
-
-        let distance = dist_sqr.sqrt();
-        manifold.contacts_count = 1;
-
-        if distance == 0.0 {
-            manifold.penetration = body_a.shape.radius;
-            manifold.normal = Vector2 { x: 1.0, y: 0.0 };
-            manifold.contacts[0] = body_a.position;
+            // Add new body to bodies pointers array and update bodies count
+            CONTACTS.write().unwrap()[PHYSICS_MANIFOLDS_COUNT.fetch_add(1, Relaxed) as usize] = Some(new_manifold);
         } else {
-            manifold.penetration = radius - distance;
-            manifold.normal = Vector2 { x: normal.x/distance, y: normal.y/distance }; // Faster than using MathNormalize() due to sqrt is already performed
-            manifold.contacts[0] = Vector2 { x: manifold.normal.x*body_a.shape.radius + body_a.position.x, y: manifold.normal.y*body_a.shape.radius + body_a.position.y };
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] new physics manifold creation failed because there is any available id to use");
         }
 
-        // Update physics body grounded state if normal direction is down
-        if !body_a.is_grounded {
-            body_a.is_grounded = manifold.normal.y < 0.0;
+        new_weak_manifold
+    }
+
+    /// Unitializes and destroys a physics manifold
+    fn destroy(manifold: PhysicsManifold) {
+        if let Some(manifold) = manifold.upgrade() {
+            let mut contacts = CONTACTS.write().unwrap();
+
+            let id = manifold.read().unwrap().id;
+            let mut index = None;
+
+            for i in 0..PHYSICS_MANIFOLDS_COUNT.load(Relaxed) {
+                let contact = contacts[i as usize].as_ref().unwrap();
+                if contact.read().unwrap().id == id {
+                    index = Some(i);
+                    break;
+                }
+            }
+
+            if index.is_none() {
+                #[cfg(feature = "physac_debug")]
+                println!("[PHYSAC] Not possible to manifold id {} in pointers array", id);
+                return;
+            }
+            let index = index.unwrap();
+
+            // Free manifold allocated memory
+            drop(manifold);
+            contacts[index as usize] = None;
+
+            // Reorder physics manifolds pointers array and its catched index
+            for i in index..PHYSICS_MANIFOLDS_COUNT.load(Relaxed) {
+                if let ([.., curr], [next, ..]) = contacts.split_at_mut(i as usize) {
+                    std::mem::swap(curr, next);
+                }
+            }
+
+            // Update physics manifolds count
+            PHYSICS_MANIFOLDS_COUNT.store(PHYSICS_MANIFOLDS_COUNT.load(Relaxed) - 1, Relaxed);
+        } else {
+            #[cfg(feature = "physac_debug")]
+            println!("[PHYSAC] error trying to destroy a null referenced manifold");
         }
     }
 }
 
-/// Solves collision between a circle to a polygon shape physics bodies
-fn solve_circle_to_polygon(manifold: &mut PhysicsManifoldData) {
-    let body_a = manifold.body_a.upgrade();
-    let body_b = manifold.body_b.upgrade();
+impl PhysicsManifoldData {
+    /// Solves a created physics manifold between two physics bodies
+    fn solve_physics_manifold(&mut self) {
+        let body_a = self.body_a.upgrade().unwrap();
+        let body_b = self.body_b.upgrade().unwrap();
 
-    if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
-        let mut body_a = body_a.write().unwrap();
+        let     body_a = body_a.read ().unwrap();
         let mut body_b = body_b.write().unwrap();
 
-        solve_different_shapes(manifold, &mut *body_a, &mut *body_b);
-    }
-}
+        match body_a.shape.kind {
+            PHYSICS_CIRCLE => {
+                match body_b.shape.kind {
+                    PHYSICS_CIRCLE => self.solve_circle_to_circle(),
+                    PHYSICS_POLYGON => self.solve_circle_to_polygon(),
+                }
+            }
+            PHYSICS_POLYGON => {
+                match body_b.shape.kind {
+                    PHYSICS_CIRCLE => self.solve_polygon_to_circle(),
+                    PHYSICS_POLYGON => self.solve_polygon_to_polygon(),
+                }
+            }
+        }
 
-/// Solves collision between a circle to a polygon shape physics bodies
-fn solve_polygon_to_circle(manifold: &mut PhysicsManifoldData) {
-    let body_a = manifold.body_a.upgrade();
-    let body_b = manifold.body_b.upgrade();
-
-    if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
-        let mut body_a = body_a.write().unwrap();
-        let mut body_b = body_b.write().unwrap();
-
-        solve_different_shapes(manifold, &mut *body_b, &mut *body_a);
-
-        manifold.normal.x *= -1.0;
-        manifold.normal.y *= -1.0;
-    }
-}
-
-/// Solve collision between two different types of shapes
-fn solve_different_shapes(manifold: &mut PhysicsManifoldData, body_a: &mut PhysicsBodyData, body_b: &mut PhysicsBodyData) {
-    todo!()
-    // manifold->contactsCount = 0;
-
-    // // Transform circle center to polygon transform space
-    // Vector2 center = bodyA->position;
-    // center = Mat2MultiplyVector2(Mat2Transpose(bodyB->shape.transform), Vector2Subtract(center, bodyB->position));
-
-    // // Find edge with minimum penetration
-    // // It is the same concept as using support points in SolvePolygonToPolygon
-    // float separation = -PHYSAC_FLT_MAX;
-    // int faceNormal = 0;
-    // PolygonData vertexData = bodyB->shape.vertexData;
-
-    // for (int i = 0; i < vertexData.vertexCount; i++)
-    // {
-    //     float currentSeparation = MathDot(vertexData.normals[i], Vector2Subtract(center, vertexData.positions[i]));
-
-    //     if (currentSeparation > bodyA->shape.radius)
-    //         return;
-
-    //     if (currentSeparation > separation)
-    //     {
-    //         separation = currentSeparation;
-    //         faceNormal = i;
-    //     }
-    // }
-
-    // // Grab face's vertices
-    // Vector2 v1 = vertexData.positions[faceNormal];
-    // int nextIndex = (((faceNormal + 1) < vertexData.vertexCount) ? (faceNormal + 1) : 0);
-    // Vector2 v2 = vertexData.positions[nextIndex];
-
-    // // Check to see if center is within polygon
-    // if (separation < PHYSAC_EPSILON)
-    // {
-    //     manifold->contactsCount = 1;
-    //     Vector2 normal = Mat2MultiplyVector2(bodyB->shape.transform, vertexData.normals[faceNormal]);
-    //     manifold->normal = (Vector2){ -normal.x, -normal.y };
-    //     manifold->contacts[0] = (Vector2){ manifold->normal.x*bodyA->shape.radius + bodyA->position.x, manifold->normal.y*bodyA->shape.radius + bodyA->position.y };
-    //     manifold->penetration = bodyA->shape.radius;
-    //     return;
-    // }
-
-    // // Determine which voronoi region of the edge center of circle lies within
-    // float dot1 = MathDot(Vector2Subtract(center, v1), Vector2Subtract(v2, v1));
-    // float dot2 = MathDot(Vector2Subtract(center, v2), Vector2Subtract(v1, v2));
-    // manifold->penetration = bodyA->shape.radius - separation;
-
-    // if (dot1 <= 0.0f) // Closest to v1
-    // {
-    //     if (DistSqr(center, v1) > bodyA->shape.radius*bodyA->shape.radius)
-    //         return;
-
-    //     manifold->contactsCount = 1;
-    //     Vector2 normal = Vector2Subtract(v1, center);
-    //     normal = Mat2MultiplyVector2(bodyB->shape.transform, normal);
-    //     MathNormalize(&normal);
-    //     manifold->normal = normal;
-    //     v1 = Mat2MultiplyVector2(bodyB->shape.transform, v1);
-    //     v1 = Vector2Add(v1, bodyB->position);
-    //     manifold->contacts[0] = v1;
-    // }
-    // else if (dot2 <= 0.0f) // Closest to v2
-    // {
-    //     if (DistSqr(center, v2) > bodyA->shape.radius*bodyA->shape.radius)
-    //         return;
-
-    //     manifold->contactsCount = 1;
-    //     Vector2 normal = Vector2Subtract(v2, center);
-    //     v2 = Mat2MultiplyVector2(bodyB->shape.transform, v2);
-    //     v2 = Vector2Add(v2, bodyB->position);
-    //     manifold->contacts[0] = v2;
-    //     normal = Mat2MultiplyVector2(bodyB->shape.transform, normal);
-    //     MathNormalize(&normal);
-    //     manifold->normal = normal;
-    // }
-    // else // Closest to face
-    // {
-    //     Vector2 normal = vertexData.normals[faceNormal];
-
-    //     if (MathDot(Vector2Subtract(center, v1), normal) > bodyA->shape.radius)
-    //         return;
-
-    //     normal = Mat2MultiplyVector2(bodyB->shape.transform, normal);
-    //     manifold->normal = (Vector2){ -normal.x, -normal.y };
-    //     manifold->contacts[0] = (Vector2){ manifold->normal.x*bodyA->shape.radius + bodyA->position.x, manifold->normal.y*bodyA->shape.radius + bodyA->position.y };
-    //     manifold->contactsCount = 1;
-    // }
-}
-
-/// Solves collision between two polygons shape physics bodies
-fn solve_polygon_to_polygon(manifold: &mut PhysicsManifoldData) {
-    todo!()
-    // if ((manifold->bodyA == NULL) || (manifold->bodyB == NULL))
-    //     return;
-
-    // PhysicsShape bodyA = manifold->bodyA->shape;
-    // PhysicsShape bodyB = manifold->bodyB->shape;
-    // manifold->contactsCount = 0;
-
-    // // Check for separating axis with A shape's face planes
-    // int faceA = 0;
-    // float penetrationA = FindAxisLeastPenetration(&faceA, bodyA, bodyB);
-
-    // if (penetrationA >= 0.0f)
-    //     return;
-
-    // // Check for separating axis with B shape's face planes
-    // int faceB = 0;
-    // float penetrationB = FindAxisLeastPenetration(&faceB, bodyB, bodyA);
-
-    // if (penetrationB >= 0.0f)
-    //     return;
-
-    // int referenceIndex = 0;
-    // bool flip = false;  // Always point from A shape to B shape
-
-    // PhysicsShape refPoly; // Reference
-    // PhysicsShape incPoly; // Incident
-
-    // // Determine which shape contains reference face
-    // if (BiasGreaterThan(penetrationA, penetrationB))
-    // {
-    //     refPoly = bodyA;
-    //     incPoly = bodyB;
-    //     referenceIndex = faceA;
-    // }
-    // else
-    // {
-    //     refPoly = bodyB;
-    //     incPoly = bodyA;
-    //     referenceIndex = faceB;
-    //     flip = true;
-    // }
-
-    // // World space incident face
-    // Vector2 incidentFace[2];
-    // FindIncidentFace(&incidentFace[0], &incidentFace[1], refPoly, incPoly, referenceIndex);
-
-    // // Setup reference face vertices
-    // PolygonData refData = refPoly.vertexData;
-    // Vector2 v1 = refData.positions[referenceIndex];
-    // referenceIndex = (((referenceIndex + 1) < refData.vertexCount) ? (referenceIndex + 1) : 0);
-    // Vector2 v2 = refData.positions[referenceIndex];
-
-    // // Transform vertices to world space
-    // v1 = Mat2MultiplyVector2(refPoly.transform, v1);
-    // v1 = Vector2Add(v1, refPoly.body->position);
-    // v2 = Mat2MultiplyVector2(refPoly.transform, v2);
-    // v2 = Vector2Add(v2, refPoly.body->position);
-
-    // // Calculate reference face side normal in world space
-    // Vector2 sidePlaneNormal = Vector2Subtract(v2, v1);
-    // MathNormalize(&sidePlaneNormal);
-
-    // // Orthogonalize
-    // Vector2 refFaceNormal = { sidePlaneNormal.y, -sidePlaneNormal.x };
-    // float refC = MathDot(refFaceNormal, v1);
-    // float negSide = MathDot(sidePlaneNormal, v1)*-1;
-    // float posSide = MathDot(sidePlaneNormal, v2);
-
-    // // Clip incident face to reference face side planes (due to floating point error, possible to not have required points
-    // if (Clip((Vector2){ -sidePlaneNormal.x, -sidePlaneNormal.y }, negSide, &incidentFace[0], &incidentFace[1]) < 2)
-    //     return;
-
-    // if (Clip(sidePlaneNormal, posSide, &incidentFace[0], &incidentFace[1]) < 2)
-    //     return;
-
-    // // Flip normal if required
-    // manifold->normal = (flip ? (Vector2){ -refFaceNormal.x, -refFaceNormal.y } : refFaceNormal);
-
-    // // Keep points behind reference face
-    // int currentPoint = 0; // Clipped points behind reference face
-    // float separation = MathDot(refFaceNormal, incidentFace[0]) - refC;
-
-    // if (separation <= 0.0f)
-    // {
-    //     manifold->contacts[currentPoint] = incidentFace[0];
-    //     manifold->penetration = -separation;
-    //     currentPoint++;
-    // }
-    // else
-    //     manifold->penetration = 0.0f;
-
-    // separation = MathDot(refFaceNormal, incidentFace[1]) - refC;
-
-    // if (separation <= 0.0f)
-    // {
-    //     manifold->contacts[currentPoint] = incidentFace[1];
-    //     manifold->penetration += -separation;
-    //     currentPoint++;
-
-    //     // Calculate total penetration average
-    //     manifold->penetration /= currentPoint;
-    // }
-
-    // manifold->contactsCount = currentPoint;
-}
-
-/// Integrates physics forces into velocity
-fn integrate_physics_forces(body: &mut PhysicsBodyData) {
-    if (body.inverse_mass == 0.0) || !body.enabled {
-        return;
+        // Update physics body grounded state if normal direction is down and grounded state is not set yet in previous manifolds
+        if !body_b.is_grounded {
+            body_b.is_grounded = self.normal.y < 0.0;
+        }
     }
 
-    body.velocity.x += ((body.force.x*body.inverse_mass) as f64*(unsafe { DELTA_TIME }/2.0)) as f32;
-    body.velocity.y += ((body.force.y*body.inverse_mass) as f64*(unsafe { DELTA_TIME }/2.0)) as f32;
+    /// Solves collision between two circle shape physics bodies
+    fn solve_circle_to_circle(&mut self) {
+        let body_a = self.body_a.upgrade();
+        let body_b = self.body_b.upgrade();
 
-    if body.use_gravity {
-        body.velocity.x += (unsafe { GRAVITY_FORCE.x as f64 }*(unsafe { DELTA_TIME }/1000.0/2.0)) as f32;
-        body.velocity.y += (unsafe { GRAVITY_FORCE.y as f64 }*(unsafe { DELTA_TIME }/1000.0/2.0)) as f32;
-    }
+        if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
+            let mut body_a = body_a.write().unwrap();
+            let     body_b = body_b.read ().unwrap();
 
-    if !body.freeze_orient {
-        body.angular_velocity += (body.torque as f64*body.inverse_inertia as f64*(unsafe { DELTA_TIME }/2.0)) as f32;
-    }
-}
+            // Calculate translational vector, which is normal
+            let normal = body_b.position - body_a.position;
 
-/// Initializes physics manifolds to solve collisions
-fn initialize_physics_manifolds(manifold: &mut PhysicsManifoldData) {
-    let body_a = manifold.body_a.upgrade();
-    let body_b = manifold.body_b.upgrade();
+            let dist_sqr = normal.length_sqr();
+            let radius = body_a.shape.radius + body_b.shape.radius;
 
-    if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
-        let body_a = body_a.read().unwrap();
-        let body_b = body_b.read().unwrap();
+            // Check if circles are not in contact
+            if dist_sqr >= radius*radius {
+                self.contacts_count = 0;
+                return;
+            }
 
-        // Calculate average restitution, static and dynamic friction
-        manifold.restitution = (body_a.restitution*body_b.restitution).sqrt();
-        manifold.static_friction = (body_a.static_friction*body_b.static_friction).sqrt();
-        manifold.dynamic_friction = (body_a.dynamic_friction*body_b.dynamic_friction).sqrt();
+            let distance = dist_sqr.sqrt();
+            self.contacts_count = 1;
 
-        for i in 0..manifold.contacts_count
-        {
-            // Caculate radius from center of mass to contact
-            let radius_a = manifold.contacts[i as usize] - body_a.position;
-            let radius_b = manifold.contacts[i as usize] - body_b.position;
+            if distance == 0.0 {
+                self.penetration = body_a.shape.radius;
+                self.normal = Vector2 { x: 1.0, y: 0.0 };
+                self.contacts[0] = body_a.position;
+            } else {
+                self.penetration = radius - distance;
+                self.normal = Vector2 { x: normal.x/distance, y: normal.y/distance }; // Faster than using MathNormalize() due to sqrt is already performed
+                self.contacts[0] = Vector2 {
+                    x: self.normal.x*body_a.shape.radius + body_a.position.x,
+                    y: self.normal.y*body_a.shape.radius + body_a.position.y,
+                };
+            }
 
-            let cross_a = math_cross(body_a.angular_velocity, radius_a);
-            let cross_b = math_cross(body_b.angular_velocity, radius_b);
-
-            let mut radius_v = Vector2 { x: 0.0, y: 0.0 };
-            radius_v.x = body_b.velocity.x + cross_b.x - body_a.velocity.x - cross_a.x;
-            radius_v.y = body_b.velocity.y + cross_b.y - body_a.velocity.y - cross_a.y;
-
-            // Determine if we should perform a resting collision or not;
-            // The idea is if the only thing moving this object is gravity, then the collision should be performed without any restitution
-            if radius_v.length_sqr() < ((Vector2 {
-                x: unsafe { GRAVITY_FORCE.x }*unsafe { DELTA_TIME } as f32/1000.0,
-                y: unsafe { GRAVITY_FORCE.y }*unsafe { DELTA_TIME } as f32/1000.0,
-            }).length_sqr() + f32::EPSILON) {
-                manifold.restitution = 0.0;
+            // Update physics body grounded state if normal direction is down
+            if !body_a.is_grounded {
+                body_a.is_grounded = self.normal.y < 0.0;
             }
         }
     }
-}
 
-/// Integrates physics collisions impulses to solve collisions
-fn integrate_physics_impulses(manifold: &mut PhysicsManifoldData) {
-    todo!()
-    // PhysicsBody bodyA = manifold->bodyA;
-    // PhysicsBody bodyB = manifold->bodyB;
+    /// Solves collision between a circle to a polygon shape physics bodies
+    fn solve_circle_to_polygon(&mut self) {
+        let body_a = self.body_a.upgrade();
+        let body_b = self.body_b.upgrade();
 
-    // if ((bodyA == NULL) || (bodyB == NULL))
-    //     return;
+        if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
+            let mut body_a = body_a.write().unwrap();
+            let mut body_b = body_b.write().unwrap();
 
-    // // Early out and positional correct if both objects have infinite mass
-    // if (fabs(bodyA->inverseMass + bodyB->inverseMass) <= PHYSAC_EPSILON)
-    // {
-    //     bodyA->velocity = PHYSAC_VECTOR_ZERO;
-    //     bodyB->velocity = PHYSAC_VECTOR_ZERO;
-    //     return;
-    // }
-
-    // for (int i = 0; i < manifold->contactsCount; i++)
-    // {
-    //     // Calculate radius from center of mass to contact
-    //     Vector2 radiusA = Vector2Subtract(manifold->contacts[i], bodyA->position);
-    //     Vector2 radiusB = Vector2Subtract(manifold->contacts[i], bodyB->position);
-
-    //     // Calculate relative velocity
-    //     Vector2 radiusV = { 0.0f, 0.0f };
-    //     radiusV.x = bodyB->velocity.x + MathCross(bodyB->angularVelocity, radiusB).x - bodyA->velocity.x - MathCross(bodyA->angularVelocity, radiusA).x;
-    //     radiusV.y = bodyB->velocity.y + MathCross(bodyB->angularVelocity, radiusB).y - bodyA->velocity.y - MathCross(bodyA->angularVelocity, radiusA).y;
-
-    //     // Relative velocity along the normal
-    //     float contactVelocity = MathDot(radiusV, manifold->normal);
-
-    //     // Do not resolve if velocities are separating
-    //     if (contactVelocity > 0.0f)
-    //         return;
-
-    //     float raCrossN = MathCrossVector2(radiusA, manifold->normal);
-    //     float rbCrossN = MathCrossVector2(radiusB, manifold->normal);
-
-    //     float inverseMassSum = bodyA->inverseMass + bodyB->inverseMass + (raCrossN*raCrossN)*bodyA->inverseInertia + (rbCrossN*rbCrossN)*bodyB->inverseInertia;
-
-    //     // Calculate impulse scalar value
-    //     float impulse = -(1.0f + manifold->restitution)*contactVelocity;
-    //     impulse /= inverseMassSum;
-    //     impulse /= (float)manifold->contactsCount;
-
-    //     // Apply impulse to each physics body
-    //     Vector2 impulseV = { manifold->normal.x*impulse, manifold->normal.y*impulse };
-
-    //     if (bodyA->enabled)
-    //     {
-    //         bodyA->velocity.x += bodyA->inverseMass*(-impulseV.x);
-    //         bodyA->velocity.y += bodyA->inverseMass*(-impulseV.y);
-
-    //         if (!bodyA->freezeOrient)
-    //             bodyA->angularVelocity += bodyA->inverseInertia*MathCrossVector2(radiusA, (Vector2){ -impulseV.x, -impulseV.y });
-    //     }
-
-    //     if (bodyB->enabled)
-    //     {
-    //         bodyB->velocity.x += bodyB->inverseMass*(impulseV.x);
-    //         bodyB->velocity.y += bodyB->inverseMass*(impulseV.y);
-
-    //         if (!bodyB->freezeOrient)
-    //             bodyB->angularVelocity += bodyB->inverseInertia*MathCrossVector2(radiusB, impulseV);
-    //     }
-
-    //     // Apply friction impulse to each physics body
-    //     radiusV.x = bodyB->velocity.x + MathCross(bodyB->angularVelocity, radiusB).x - bodyA->velocity.x - MathCross(bodyA->angularVelocity, radiusA).x;
-    //     radiusV.y = bodyB->velocity.y + MathCross(bodyB->angularVelocity, radiusB).y - bodyA->velocity.y - MathCross(bodyA->angularVelocity, radiusA).y;
-
-    //     Vector2 tangent = { radiusV.x - (manifold->normal.x*MathDot(radiusV, manifold->normal)), radiusV.y - (manifold->normal.y*MathDot(radiusV, manifold->normal)) };
-    //     MathNormalize(&tangent);
-
-    //     // Calculate impulse tangent magnitude
-    //     float impulseTangent = -MathDot(radiusV, tangent);
-    //     impulseTangent /= inverseMassSum;
-    //     impulseTangent /= (float)manifold->contactsCount;
-
-    //     float absImpulseTangent = fabs(impulseTangent);
-
-    //     // Don't apply tiny friction impulses
-    //     if (absImpulseTangent <= PHYSAC_EPSILON)
-    //         return;
-
-    //     // Apply coulumb's law
-    //     Vector2 tangentImpulse = { 0.0f, 0.0f };
-    //     if (absImpulseTangent < impulse*manifold->staticFriction)
-    //         tangentImpulse = (Vector2){ tangent.x*impulseTangent, tangent.y*impulseTangent };
-    //     else
-    //         tangentImpulse = (Vector2){ tangent.x*-impulse*manifold->dynamicFriction, tangent.y*-impulse*manifold->dynamicFriction };
-
-    //     // Apply friction impulse
-    //     if (bodyA->enabled)
-    //     {
-    //         bodyA->velocity.x += bodyA->inverseMass*(-tangentImpulse.x);
-    //         bodyA->velocity.y += bodyA->inverseMass*(-tangentImpulse.y);
-
-    //         if (!bodyA->freezeOrient)
-    //             bodyA->angularVelocity += bodyA->inverseInertia*MathCrossVector2(radiusA, (Vector2){ -tangentImpulse.x, -tangentImpulse.y });
-    //     }
-
-    //     if (bodyB->enabled)
-    //     {
-    //         bodyB->velocity.x += bodyB->inverseMass*(tangentImpulse.x);
-    //         bodyB->velocity.y += bodyB->inverseMass*(tangentImpulse.y);
-
-    //         if (!bodyB->freezeOrient)
-    //             bodyB->angularVelocity += bodyB->inverseInertia*MathCrossVector2(radiusB, tangentImpulse);
-    //     }
-    // }
-}
-
-/// Integrates physics velocity into position and forces
-fn integrate_physics_velocity(body: &mut PhysicsBodyData) {
-    if !body.enabled {
-        return;
+            self.solve_different_shapes(&mut *body_a, &mut *body_b);
+        }
     }
 
-    body.position.x += (body.velocity.x as f64*unsafe { DELTA_TIME }) as f32;
-    body.position.y += (body.velocity.y as f64*unsafe { DELTA_TIME }) as f32;
+    /// Solves collision between a circle to a polygon shape physics bodies
+    fn solve_polygon_to_circle(&mut self) {
+        let body_a = self.body_a.upgrade();
+        let body_b = self.body_b.upgrade();
 
-    if !body.freeze_orient {
-        body.orient += (body.angular_velocity as f64*unsafe { DELTA_TIME }) as f32;
+        if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
+            let mut body_a = body_a.write().unwrap();
+            let mut body_b = body_b.write().unwrap();
+
+            self.solve_different_shapes(&mut *body_b, &mut *body_a);
+
+            self.normal.x *= -1.0;
+            self.normal.y *= -1.0;
+        }
     }
 
-    let orient = body.orient;
-    body.shape.transform.set(orient);
+    /// Solve collision between two different types of shapes
+    fn solve_different_shapes(&mut self, body_a: &mut PhysicsBodyData, body_b: &mut PhysicsBodyData) {
+        todo!()
+        // manifold->contactsCount = 0;
 
-    integrate_physics_forces(&mut *body);
+        // // Transform circle center to polygon transform space
+        // Vector2 center = bodyA->position;
+        // center = Mat2MultiplyVector2(Mat2Transpose(bodyB->shape.transform), Vector2Subtract(center, bodyB->position));
+
+        // // Find edge with minimum penetration
+        // // It is the same concept as using support points in SolvePolygonToPolygon
+        // float separation = -PHYSAC_FLT_MAX;
+        // int faceNormal = 0;
+        // PolygonData vertexData = bodyB->shape.vertexData;
+
+        // for (int i = 0; i < vertexData.vertexCount; i++)
+        // {
+        //     float currentSeparation = MathDot(vertexData.normals[i], Vector2Subtract(center, vertexData.positions[i]));
+
+        //     if (currentSeparation > bodyA->shape.radius)
+        //         return;
+
+        //     if (currentSeparation > separation)
+        //     {
+        //         separation = currentSeparation;
+        //         faceNormal = i;
+        //     }
+        // }
+
+        // // Grab face's vertices
+        // Vector2 v1 = vertexData.positions[faceNormal];
+        // int nextIndex = (((faceNormal + 1) < vertexData.vertexCount) ? (faceNormal + 1) : 0);
+        // Vector2 v2 = vertexData.positions[nextIndex];
+
+        // // Check to see if center is within polygon
+        // if (separation < PHYSAC_EPSILON)
+        // {
+        //     manifold->contactsCount = 1;
+        //     Vector2 normal = Mat2MultiplyVector2(bodyB->shape.transform, vertexData.normals[faceNormal]);
+        //     manifold->normal = (Vector2){ -normal.x, -normal.y };
+        //     manifold->contacts[0] = (Vector2){ manifold->normal.x*bodyA->shape.radius + bodyA->position.x, manifold->normal.y*bodyA->shape.radius + bodyA->position.y };
+        //     manifold->penetration = bodyA->shape.radius;
+        //     return;
+        // }
+
+        // // Determine which voronoi region of the edge center of circle lies within
+        // float dot1 = MathDot(Vector2Subtract(center, v1), Vector2Subtract(v2, v1));
+        // float dot2 = MathDot(Vector2Subtract(center, v2), Vector2Subtract(v1, v2));
+        // manifold->penetration = bodyA->shape.radius - separation;
+
+        // if (dot1 <= 0.0f) // Closest to v1
+        // {
+        //     if (DistSqr(center, v1) > bodyA->shape.radius*bodyA->shape.radius)
+        //         return;
+
+        //     manifold->contactsCount = 1;
+        //     Vector2 normal = Vector2Subtract(v1, center);
+        //     normal = Mat2MultiplyVector2(bodyB->shape.transform, normal);
+        //     MathNormalize(&normal);
+        //     manifold->normal = normal;
+        //     v1 = Mat2MultiplyVector2(bodyB->shape.transform, v1);
+        //     v1 = Vector2Add(v1, bodyB->position);
+        //     manifold->contacts[0] = v1;
+        // }
+        // else if (dot2 <= 0.0f) // Closest to v2
+        // {
+        //     if (DistSqr(center, v2) > bodyA->shape.radius*bodyA->shape.radius)
+        //         return;
+
+        //     manifold->contactsCount = 1;
+        //     Vector2 normal = Vector2Subtract(v2, center);
+        //     v2 = Mat2MultiplyVector2(bodyB->shape.transform, v2);
+        //     v2 = Vector2Add(v2, bodyB->position);
+        //     manifold->contacts[0] = v2;
+        //     normal = Mat2MultiplyVector2(bodyB->shape.transform, normal);
+        //     MathNormalize(&normal);
+        //     manifold->normal = normal;
+        // }
+        // else // Closest to face
+        // {
+        //     Vector2 normal = vertexData.normals[faceNormal];
+
+        //     if (MathDot(Vector2Subtract(center, v1), normal) > bodyA->shape.radius)
+        //         return;
+
+        //     normal = Mat2MultiplyVector2(bodyB->shape.transform, normal);
+        //     manifold->normal = (Vector2){ -normal.x, -normal.y };
+        //     manifold->contacts[0] = (Vector2){ manifold->normal.x*bodyA->shape.radius + bodyA->position.x, manifold->normal.y*bodyA->shape.radius + bodyA->position.y };
+        //     manifold->contactsCount = 1;
+        // }
+    }
+
+    /// Solves collision between two polygons shape physics bodies
+    fn solve_polygon_to_polygon(&mut self) {
+        todo!()
+        // if ((manifold->bodyA == NULL) || (manifold->bodyB == NULL))
+        //     return;
+
+        // PhysicsShape bodyA = manifold->bodyA->shape;
+        // PhysicsShape bodyB = manifold->bodyB->shape;
+        // manifold->contactsCount = 0;
+
+        // // Check for separating axis with A shape's face planes
+        // int faceA = 0;
+        // float penetrationA = FindAxisLeastPenetration(&faceA, bodyA, bodyB);
+
+        // if (penetrationA >= 0.0f)
+        //     return;
+
+        // // Check for separating axis with B shape's face planes
+        // int faceB = 0;
+        // float penetrationB = FindAxisLeastPenetration(&faceB, bodyB, bodyA);
+
+        // if (penetrationB >= 0.0f)
+        //     return;
+
+        // int referenceIndex = 0;
+        // bool flip = false;  // Always point from A shape to B shape
+
+        // PhysicsShape refPoly; // Reference
+        // PhysicsShape incPoly; // Incident
+
+        // // Determine which shape contains reference face
+        // if (BiasGreaterThan(penetrationA, penetrationB))
+        // {
+        //     refPoly = bodyA;
+        //     incPoly = bodyB;
+        //     referenceIndex = faceA;
+        // }
+        // else
+        // {
+        //     refPoly = bodyB;
+        //     incPoly = bodyA;
+        //     referenceIndex = faceB;
+        //     flip = true;
+        // }
+
+        // // World space incident face
+        // Vector2 incidentFace[2];
+        // FindIncidentFace(&incidentFace[0], &incidentFace[1], refPoly, incPoly, referenceIndex);
+
+        // // Setup reference face vertices
+        // PolygonData refData = refPoly.vertexData;
+        // Vector2 v1 = refData.positions[referenceIndex];
+        // referenceIndex = (((referenceIndex + 1) < refData.vertexCount) ? (referenceIndex + 1) : 0);
+        // Vector2 v2 = refData.positions[referenceIndex];
+
+        // // Transform vertices to world space
+        // v1 = Mat2MultiplyVector2(refPoly.transform, v1);
+        // v1 = Vector2Add(v1, refPoly.body->position);
+        // v2 = Mat2MultiplyVector2(refPoly.transform, v2);
+        // v2 = Vector2Add(v2, refPoly.body->position);
+
+        // // Calculate reference face side normal in world space
+        // Vector2 sidePlaneNormal = Vector2Subtract(v2, v1);
+        // MathNormalize(&sidePlaneNormal);
+
+        // // Orthogonalize
+        // Vector2 refFaceNormal = { sidePlaneNormal.y, -sidePlaneNormal.x };
+        // float refC = MathDot(refFaceNormal, v1);
+        // float negSide = MathDot(sidePlaneNormal, v1)*-1;
+        // float posSide = MathDot(sidePlaneNormal, v2);
+
+        // // Clip incident face to reference face side planes (due to floating point error, possible to not have required points
+        // if (Clip((Vector2){ -sidePlaneNormal.x, -sidePlaneNormal.y }, negSide, &incidentFace[0], &incidentFace[1]) < 2)
+        //     return;
+
+        // if (Clip(sidePlaneNormal, posSide, &incidentFace[0], &incidentFace[1]) < 2)
+        //     return;
+
+        // // Flip normal if required
+        // manifold->normal = (flip ? (Vector2){ -refFaceNormal.x, -refFaceNormal.y } : refFaceNormal);
+
+        // // Keep points behind reference face
+        // int currentPoint = 0; // Clipped points behind reference face
+        // float separation = MathDot(refFaceNormal, incidentFace[0]) - refC;
+
+        // if (separation <= 0.0f)
+        // {
+        //     manifold->contacts[currentPoint] = incidentFace[0];
+        //     manifold->penetration = -separation;
+        //     currentPoint++;
+        // }
+        // else
+        //     manifold->penetration = 0.0f;
+
+        // separation = MathDot(refFaceNormal, incidentFace[1]) - refC;
+
+        // if (separation <= 0.0f)
+        // {
+        //     manifold->contacts[currentPoint] = incidentFace[1];
+        //     manifold->penetration += -separation;
+        //     currentPoint++;
+
+        //     // Calculate total penetration average
+        //     manifold->penetration /= currentPoint;
+        // }
+
+        // manifold->contactsCount = currentPoint;
+    }
+}
+
+impl PhysicsBodyData {
+    /// Integrates physics forces into velocity
+    fn integrate_physics_forces(&mut self) {
+        if (self.inverse_mass == 0.0) || !self.enabled {
+            return;
+        }
+
+        self.velocity.x += ((self.force.x*self.inverse_mass) as f64*(unsafe { DELTA_TIME }/2.0)) as f32;
+        self.velocity.y += ((self.force.y*self.inverse_mass) as f64*(unsafe { DELTA_TIME }/2.0)) as f32;
+
+        if self.use_gravity {
+            self.velocity.x += (unsafe { GRAVITY_FORCE.x as f64 }*(unsafe { DELTA_TIME }/1000.0/2.0)) as f32;
+            self.velocity.y += (unsafe { GRAVITY_FORCE.y as f64 }*(unsafe { DELTA_TIME }/1000.0/2.0)) as f32;
+        }
+
+        if !self.freeze_orient {
+            self.angular_velocity += (self.torque as f64*self.inverse_inertia as f64*(unsafe { DELTA_TIME }/2.0)) as f32;
+        }
+    }
+}
+
+impl PhysicsManifoldData {
+    /// Initializes physics manifolds to solve collisions
+    fn initialize_physics_manifolds(&mut self) {
+        let body_a = self.body_a.upgrade();
+        let body_b = self.body_b.upgrade();
+
+        if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
+            let body_a = body_a.read().unwrap();
+            let body_b = body_b.read().unwrap();
+
+            // Calculate average restitution, static and dynamic friction
+            self.restitution = (body_a.restitution*body_b.restitution).sqrt();
+            self.static_friction = (body_a.static_friction*body_b.static_friction).sqrt();
+            self.dynamic_friction = (body_a.dynamic_friction*body_b.dynamic_friction).sqrt();
+
+            for i in 0..self.contacts_count
+            {
+                // Caculate radius from center of mass to contact
+                let radius_a = self.contacts[i as usize] - body_a.position;
+                let radius_b = self.contacts[i as usize] - body_b.position;
+
+                let cross_a = math_cross(body_a.angular_velocity, radius_a);
+                let cross_b = math_cross(body_b.angular_velocity, radius_b);
+
+                let mut radius_v = Vector2 { x: 0.0, y: 0.0 };
+                radius_v.x = body_b.velocity.x + cross_b.x - body_a.velocity.x - cross_a.x;
+                radius_v.y = body_b.velocity.y + cross_b.y - body_a.velocity.y - cross_a.y;
+
+                // Determine if we should perform a resting collision or not;
+                // The idea is if the only thing moving this object is gravity, then the collision should be performed without any restitution
+                if radius_v.length_sqr() < ((Vector2 {
+                    x: unsafe { GRAVITY_FORCE.x }*unsafe { DELTA_TIME } as f32/1000.0,
+                    y: unsafe { GRAVITY_FORCE.y }*unsafe { DELTA_TIME } as f32/1000.0,
+                }).length_sqr() + f32::EPSILON) {
+                    self.restitution = 0.0;
+                }
+            }
+        }
+    }
+
+    /// Integrates physics collisions impulses to solve collisions
+    fn integrate_physics_impulses(&mut self) {
+        todo!()
+        // PhysicsBody bodyA = manifold->bodyA;
+        // PhysicsBody bodyB = manifold->bodyB;
+
+        // if ((bodyA == NULL) || (bodyB == NULL))
+        //     return;
+
+        // // Early out and positional correct if both objects have infinite mass
+        // if (fabs(bodyA->inverseMass + bodyB->inverseMass) <= PHYSAC_EPSILON)
+        // {
+        //     bodyA->velocity = PHYSAC_VECTOR_ZERO;
+        //     bodyB->velocity = PHYSAC_VECTOR_ZERO;
+        //     return;
+        // }
+
+        // for (int i = 0; i < manifold->contactsCount; i++)
+        // {
+        //     // Calculate radius from center of mass to contact
+        //     Vector2 radiusA = Vector2Subtract(manifold->contacts[i], bodyA->position);
+        //     Vector2 radiusB = Vector2Subtract(manifold->contacts[i], bodyB->position);
+
+        //     // Calculate relative velocity
+        //     Vector2 radiusV = { 0.0f, 0.0f };
+        //     radiusV.x = bodyB->velocity.x + MathCross(bodyB->angularVelocity, radiusB).x - bodyA->velocity.x - MathCross(bodyA->angularVelocity, radiusA).x;
+        //     radiusV.y = bodyB->velocity.y + MathCross(bodyB->angularVelocity, radiusB).y - bodyA->velocity.y - MathCross(bodyA->angularVelocity, radiusA).y;
+
+        //     // Relative velocity along the normal
+        //     float contactVelocity = MathDot(radiusV, manifold->normal);
+
+        //     // Do not resolve if velocities are separating
+        //     if (contactVelocity > 0.0f)
+        //         return;
+
+        //     float raCrossN = MathCrossVector2(radiusA, manifold->normal);
+        //     float rbCrossN = MathCrossVector2(radiusB, manifold->normal);
+
+        //     float inverseMassSum = bodyA->inverseMass + bodyB->inverseMass + (raCrossN*raCrossN)*bodyA->inverseInertia + (rbCrossN*rbCrossN)*bodyB->inverseInertia;
+
+        //     // Calculate impulse scalar value
+        //     float impulse = -(1.0f + manifold->restitution)*contactVelocity;
+        //     impulse /= inverseMassSum;
+        //     impulse /= (float)manifold->contactsCount;
+
+        //     // Apply impulse to each physics body
+        //     Vector2 impulseV = { manifold->normal.x*impulse, manifold->normal.y*impulse };
+
+        //     if (bodyA->enabled)
+        //     {
+        //         bodyA->velocity.x += bodyA->inverseMass*(-impulseV.x);
+        //         bodyA->velocity.y += bodyA->inverseMass*(-impulseV.y);
+
+        //         if (!bodyA->freezeOrient)
+        //             bodyA->angularVelocity += bodyA->inverseInertia*MathCrossVector2(radiusA, (Vector2){ -impulseV.x, -impulseV.y });
+        //     }
+
+        //     if (bodyB->enabled)
+        //     {
+        //         bodyB->velocity.x += bodyB->inverseMass*(impulseV.x);
+        //         bodyB->velocity.y += bodyB->inverseMass*(impulseV.y);
+
+        //         if (!bodyB->freezeOrient)
+        //             bodyB->angularVelocity += bodyB->inverseInertia*MathCrossVector2(radiusB, impulseV);
+        //     }
+
+        //     // Apply friction impulse to each physics body
+        //     radiusV.x = bodyB->velocity.x + MathCross(bodyB->angularVelocity, radiusB).x - bodyA->velocity.x - MathCross(bodyA->angularVelocity, radiusA).x;
+        //     radiusV.y = bodyB->velocity.y + MathCross(bodyB->angularVelocity, radiusB).y - bodyA->velocity.y - MathCross(bodyA->angularVelocity, radiusA).y;
+
+        //     Vector2 tangent = { radiusV.x - (manifold->normal.x*MathDot(radiusV, manifold->normal)), radiusV.y - (manifold->normal.y*MathDot(radiusV, manifold->normal)) };
+        //     MathNormalize(&tangent);
+
+        //     // Calculate impulse tangent magnitude
+        //     float impulseTangent = -MathDot(radiusV, tangent);
+        //     impulseTangent /= inverseMassSum;
+        //     impulseTangent /= (float)manifold->contactsCount;
+
+        //     float absImpulseTangent = fabs(impulseTangent);
+
+        //     // Don't apply tiny friction impulses
+        //     if (absImpulseTangent <= PHYSAC_EPSILON)
+        //         return;
+
+        //     // Apply coulumb's law
+        //     Vector2 tangentImpulse = { 0.0f, 0.0f };
+        //     if (absImpulseTangent < impulse*manifold->staticFriction)
+        //         tangentImpulse = (Vector2){ tangent.x*impulseTangent, tangent.y*impulseTangent };
+        //     else
+        //         tangentImpulse = (Vector2){ tangent.x*-impulse*manifold->dynamicFriction, tangent.y*-impulse*manifold->dynamicFriction };
+
+        //     // Apply friction impulse
+        //     if (bodyA->enabled)
+        //     {
+        //         bodyA->velocity.x += bodyA->inverseMass*(-tangentImpulse.x);
+        //         bodyA->velocity.y += bodyA->inverseMass*(-tangentImpulse.y);
+
+        //         if (!bodyA->freezeOrient)
+        //             bodyA->angularVelocity += bodyA->inverseInertia*MathCrossVector2(radiusA, (Vector2){ -tangentImpulse.x, -tangentImpulse.y });
+        //     }
+
+        //     if (bodyB->enabled)
+        //     {
+        //         bodyB->velocity.x += bodyB->inverseMass*(tangentImpulse.x);
+        //         bodyB->velocity.y += bodyB->inverseMass*(tangentImpulse.y);
+
+        //         if (!bodyB->freezeOrient)
+        //             bodyB->angularVelocity += bodyB->inverseInertia*MathCrossVector2(radiusB, tangentImpulse);
+        //     }
+        // }
+    }
+}
+
+impl PhysicsBodyData {
+    /// Integrates physics velocity into position and forces
+    fn integrate_physics_velocity(&mut self) {
+        if !self.enabled {
+            return;
+        }
+
+        self.position.x += (self.velocity.x as f64*unsafe { DELTA_TIME }) as f32;
+        self.position.y += (self.velocity.y as f64*unsafe { DELTA_TIME }) as f32;
+
+        if !self.freeze_orient {
+            self.orient += (self.angular_velocity as f64*unsafe { DELTA_TIME }) as f32;
+        }
+
+        let orient = self.orient;
+        self.shape.transform.set(orient);
+
+        self.integrate_physics_forces();
+    }
 }
 
 /// Corrects physics bodies positions based on manifolds collision information
