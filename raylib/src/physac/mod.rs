@@ -880,7 +880,7 @@ impl PhysicsBody {
 
 impl PhysicsBody {
     /// Unitializes and destroys a physics body
-    pub fn destroy(&mut self) {
+    pub fn destroy(self) {
         if let Some(body) = self.upgrade() {
             let id = body.read().unwrap().id;
             let mut index = None;
@@ -927,30 +927,27 @@ impl PhysicsBody {
 
 /// Unitializes physics pointers and exits physics loop thread
 pub fn close_physics() {
-    todo!()
-    // // Exit physics loop thread
-    // physicsThreadEnabled = false;
+    // Exit physics loop thread
+    PHYSICS_THREAD_ENABLED.store(false, Relaxed);
 
-    // #if !defined(PHYSAC_NO_THREADS)
-    //     pthread_join(physicsThreadId, NULL);
-    // #endif
+    // #[cfg(not(feature = "physac_no_threads"))]
+    // pthread_join(physicsThreadId, NULL);
 
-    // // Unitialize physics manifolds dynamic memory allocations
-    // for (int i = physicsManifoldsCount - 1; i >= 0; i--)
-    //     DestroyPhysicsManifold(contacts[i]);
+    let contacts = CONTACTS.write().unwrap();
+    let bodies = BODIES.write().unwrap();
 
-    // // Unitialize physics bodies dynamic memory allocations
-    // for (int i = physicsBodiesCount - 1; i >= 0; i--)
-    //     DestroyPhysicsBody(bodies[i]);
+    // Unitialize physics manifolds dynamic memory allocations
+    for i in (0..PHYSICS_MANIFOLDS_COUNT.load(Relaxed) - 1).rev() {
+        PhysicsManifold(Arc::downgrade(contacts[i as usize].as_ref().unwrap())).destroy();
+    }
 
-    // #if defined(PHYSAC_DEBUG)
-    //     if (physicsBodiesCount > 0 || usedMemory != 0)
-    //         println!("[PHYSAC] physics module closed with {} still allocated bodies [MEMORY: {} bytes]", physicsBodiesCount, usedMemory);
-    //     else if (physicsManifoldsCount > 0 || usedMemory != 0)
-    //         println!("[PHYSAC] physics module closed with {} still allocated manifolds [MEMORY: {} bytes]", physicsManifoldsCount, usedMemory);
-    //     else
-    //         println!("[PHYSAC] physics module closed successfully");
-    // #endif
+    // Unitialize physics bodies dynamic memory allocations
+    for i in (0..PHYSICS_BODIES_COUNT.load(Relaxed) - 1).rev() {
+        PhysicsBody(Arc::downgrade(bodies[i as usize].as_ref().unwrap())).destroy();
+    }
+
+    #[cfg(feature = "physac_debug")]
+    println!("[PHYSAC] physics module closed successfully");
 }
 
 //----------------------------------------------------------------------------------
@@ -1244,8 +1241,8 @@ impl PhysicsManifold {
     }
 
     /// Unitializes and destroys a physics manifold
-    fn destroy(manifold: PhysicsManifold) {
-        if let Some(manifold) = manifold.upgrade() {
+    fn destroy(self) {
+        if let Some(manifold) = self.upgrade() {
             let mut contacts = CONTACTS.write().unwrap();
 
             let id = manifold.read().unwrap().id;
