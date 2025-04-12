@@ -1,19 +1,27 @@
 //! Image and texture related functions
 
-use crate::{core::color::Color, databuf::DataBuf};
+use crate::core::color::Color;
 use crate::core::math::Rectangle;
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
 use std::convert::TryInto;
 use std::ffi::CString;
-use std::mem::ManuallyDrop;
-use std::os::raw::c_void;
-use std::ptr::{null, null_mut};
+use std::ptr::null_mut;
 
 use super::{error::{InvalidImageError, LoadTextureError, UpdateTextureError}, math::Vector2};
 
-pub type ImagePalette = DataBuf<Color>; // ffi::UnloadImagePalette just calls RL_FREE
-pub type ImageColors = DataBuf<Color>; // ffi::UnloadImageColors just calls RL_FREE
+make_data_buffer!(
+    ImagePalette,
+    [Color],
+    ImagePaletteAllocator,
+    (&mut self, ptr, _count) => ffi::UnloadImagePalette(ptr.cast::<ffi::Color>().as_ptr())
+);
+make_data_buffer!(
+    ImageColors,
+    [Color],
+    ImageColorsAllocator,
+    (&mut self, ptr, _count) => ffi::UnloadImageColors(ptr.cast::<ffi::Color>().as_ptr())
+);
 
 /// NPatchInfo, n-patch layout info
 #[repr(C)]

@@ -13,7 +13,7 @@ make_data_buffer!(
     RandomSequence,
     [i32],
     RandomSequenceAllocator,
-    |self, ptr, _count| ffi::UnloadRandomSequence(ptr)
+    (&mut self, ptr, _count) => ffi::UnloadRandomSequence(ptr.as_ptr())
 );
 
 impl IntoIterator for RandomSequence {

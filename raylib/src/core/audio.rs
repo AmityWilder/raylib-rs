@@ -38,7 +38,12 @@ make_thin_wrapper_lifetime!(
     ffi::UnloadAudioStream
 );
 
-make_data_buffer!(WaveSamples, [f32], WaveSamplesAllocator, |self, ptr, _count| ffi::UnloadWaveSamples(ptr));
+make_data_buffer!(
+    WaveSamples,
+    [f32],
+    WaveSamplesAllocator,
+    (&mut self, ptr, _count) => ffi::UnloadWaveSamples(ptr.as_ptr())
+);
 
 /// A marker trait specifying an audio sample (`u8`, `i16`, or `f32`).
 pub trait AudioSample {}

@@ -1,6 +1,5 @@
 //! Text and Font related functions
 //! Text manipulation functions are super unsafe so use rust String functions
-use raylib_sys::LoadUTF8;
 
 use crate::core::math::Vector2;
 use crate::core::texture::{Image, Texture2D};
@@ -28,7 +27,14 @@ make_thin_wrapper!(
     no_drop
 );
 
-make_data_buffer!(RSliceGlyphInfo, [GlyphInfo], RSliceGlyphInfoAllocator, |self, ptr, count| ffi::UnloadFontData(ptr, count as i32));
+make_data_buffer!(
+    /// A [`crate::databuf::DataBuf`] of [`GlyphInfo`]s
+    RSliceGlyphInfo,
+    [GlyphInfo],
+    RSliceGlyphInfoAllocator,
+    /// Unloads using [`ffi::UnloadFontData`]
+    (&mut self, ptr, count) => ffi::UnloadFontData(ptr.as_ptr().cast::<ffi::GlyphInfo>(), count.get().try_into().unwrap())
+);
 
 // #[cfg(feature = "nightly")]
 // impl !Send for Font {}

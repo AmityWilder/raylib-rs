@@ -1,14 +1,10 @@
 //! [`Color`] manipulation helpers
-use std::os::raw::c_void;
 
 use crate::core::math::{Vector3, Vector4};
 use crate::ffi;
 
-use raylib_sys::{ColorIsEqual, GetPixelColor, PixelFormat};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-
-use super::RaylibHandle;
 
 /// Color, 4 components, R8G8B8A8 (32bit)
 #[repr(C)]

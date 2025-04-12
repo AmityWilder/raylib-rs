@@ -118,20 +118,17 @@ macro_rules! deref_impl_wrapper {
 }
 
 macro_rules! make_data_buffer {
-    ($(#[$attrs:meta])* $Name:ident, [$T:ty], $Allocator:ident, $(#[$fn_attr:meta])* |$self:ident, $ptr:ident, $count:ident| $dealloc:expr $(,)?) => {
+    ($(#[$attrs:meta])* $Name:ident, [$T:ty], $Allocator:ident, $(#[$fn_attrs:meta])* (&mut $self:ident, $ptr:ident, $count:ident) => $dealloc:expr $(,)?) => {
         #[doc(hidden)]
         #[derive(Default)]
         pub struct $Allocator;
-        impl $crate::databuf::MemFree<$T> for $Allocator {
+        impl $crate::databuf::MemFree for $Allocator {
+            type Item = $T;
+
             #[inline]
-            #[allow(unused_unsafe)]
-            $($fn_attr)*
+            $(#[$fn_attrs])*
             unsafe fn free(&mut $self, $ptr: std::ptr::NonNull<$T>, $count: std::num::NonZeroUsize) {
-                let $ptr = $ptr.as_ptr().cast();
-                let $count = $count.get();
-                unsafe {
-                    $dealloc;
-                }
+                $dealloc
             }
         }
         impl $crate::databuf::GlobalMemFree for $Allocator {}
@@ -142,3 +139,35 @@ macro_rules! make_data_buffer {
         pub type $Name = $crate::databuf::DataBuf<$T$(, $Allocator)?>;
     };
 }
+
+// macro_rules! make_wrapper {
+//     ($(#[$attrs:meta])* $Name:ident, $Raw:ty, $dropfn:expr, $(#[$weak_attrs:meta])* $Weak:ident) => {
+//         $(#[$attrs])*
+//         pub struct $Name($Raw);
+//         impl Drop for $Name {
+//             #[allow(unused_unsafe)]
+//             fn drop(&mut self) {
+//                 unsafe {
+//                     ($dropfn)(self.0)
+//                 }
+//             }
+//         }
+//         $(#[$weak_attrs])*
+//         pub type $Weak = $crate::databuf::WeakWrapper<$Raw, $Name>;
+//         impl AsRef<$Name> for $Weak {
+//             fn as_ref(&self) -> &$Name {
+//                 unsafe { self.as_unique() }
+//             }
+//         }
+//         impl AsMut<$Name> for $Weak {
+//             fn as_mut(&mut self) -> &mut $Name {
+//                 unsafe { self.as_unique_mut() }
+//             }
+//         }
+//         impl $Name {
+//             pub unsafe fn make_weak(self) -> $Weak {
+//                 $Weak::from_raw(std::mem::ManuallyDrop::new(self).0)
+//             }
+//         }
+//     };
+// }

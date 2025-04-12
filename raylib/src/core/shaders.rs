@@ -1,5 +1,4 @@
 //! Code for the safe manipulation of shaders
-use thiserror::Error;
 
 use crate::consts::ShaderUniformDataType;
 use crate::core::math::Matrix;
@@ -7,7 +6,7 @@ use crate::core::math::{Vector2, Vector3, Vector4};
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
 use std::ffi::CString;
-use std::os::raw::{c_char, c_void};
+use std::os::raw::c_void;
 
 fn no_drop<T>(_thing: T) {}
 make_thin_wrapper!(Shader, ffi::Shader, ffi::UnloadShader);
@@ -55,7 +54,7 @@ impl RaylibHandle {
     #[cfg(target_os = "windows")]
     pub fn get_shader_default() -> WeakShader {
         unsafe {
-            WeakShader(ffi::Shader {
+            WeakShader::from_raw(ffi::Shader {
                 id: ffi::rlGetShaderIdDefault(),
                 locs: ffi::rlGetShaderLocsDefault(),
             })
@@ -165,12 +164,6 @@ impl ShaderV for &[i32] {
 }
 
 impl Shader {
-    pub unsafe fn make_weak(self) -> WeakShader {
-        let m = WeakShader(self.0);
-        std::mem::forget(self);
-        m
-    }
-
     /// Check if shader is valid
     #[inline]
     pub fn is_shader_valid(&self) -> bool {
