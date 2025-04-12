@@ -35,15 +35,13 @@ pub enum LoadSoundError {
 }
 
 #[derive(Error, Debug)]
-pub enum AllocationError {
+pub enum MemAllocError {
     #[error("memory request does not produce a valid layout")]
-    InvalidLayout,
-    #[error("memory request exceeds capacity")]
-    ExceedsCapacity,
-    #[error("memory request exceeds unsigned integer maximum")]
-    ExceedsUIntMax,
-    #[error("cannot allocate less than 1 element")]
-    SubMinSize,
+    InvalidLayout(#[from] std::alloc::LayoutError),
+    #[error("allocator returned null, possibly out of memory")]
+    AllocFailed,
+    #[error("requested more bytes than can fit in the integer type used by the allocator")]
+    OutOfBounds(#[from] std::num::TryFromIntError),
 }
 
 #[derive(Error, Debug)]
@@ -145,7 +143,7 @@ pub enum RaylibError {
     #[error("sound loading error")]
     LoadSound(#[from] LoadSoundError),
     #[error("allocation error")]
-    Allocation(#[from] AllocationError),
+    Allocation(#[from] MemAllocError),
     #[error("compression error")]
     Compression(#[from] CompressionError),
     #[error("model loading error")]

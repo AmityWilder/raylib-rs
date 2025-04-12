@@ -14,7 +14,7 @@ Permission is granted to anyone to use this software for any purpose, including 
   3. This notice may not be removed or altered from any source distribution.
 */
 
-use crate::{ffi, prelude::DataBuf};
+use crate::{ffi, databuf::DataBuf};
 use crate::misc::AsF32;
 use std::f32::consts::PI;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Range, Sub, SubAssign};

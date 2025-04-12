@@ -8,6 +8,7 @@ pub mod camera;
 pub mod collision;
 pub mod color;
 pub mod data;
+pub mod databuf;
 pub mod drawing;
 pub mod error;
 pub mod file;

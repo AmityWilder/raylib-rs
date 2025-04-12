@@ -120,8 +120,9 @@ macro_rules! deref_impl_wrapper {
 macro_rules! make_data_buffer {
     ($(#[$attrs:meta])* $Name:ident, [$T:ty], $Allocator:ident, $(#[$fn_attr:meta])* |$self:ident, $ptr:ident, $count:ident| $dealloc:expr $(,)?) => {
         #[doc(hidden)]
+        #[derive(Default)]
         pub struct $Allocator;
-        impl $crate::data::MemFree<$T> for $Allocator {
+        impl $crate::databuf::MemFree<$T> for $Allocator {
             #[inline]
             #[allow(unused_unsafe)]
             $($fn_attr)*
@@ -133,13 +134,11 @@ macro_rules! make_data_buffer {
                 }
             }
         }
-        impl $crate::data::GlobalMemFree for $Allocator {
-            const GLOBAL: Self = Self;
-        }
+        impl $crate::databuf::GlobalMemFree for $Allocator {}
         make_data_buffer!($(#[$attrs])* $Name, [$T], $Allocator);
     };
     ($(#[$attrs:meta])* $Name:ident, [$T:ty]$(, $Allocator:ty)? $(,)?) => {
         $(#[$attrs])*
-        pub type $Name = $crate::data::DataBuf<$T$(, $Allocator)?>;
+        pub type $Name = $crate::databuf::DataBuf<$T$(, $Allocator)?>;
     };
 }

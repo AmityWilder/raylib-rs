@@ -1,6 +1,6 @@
 //! Image and texture related functions
 
-use crate::{core::color::Color, prelude::DataBuf};
+use crate::{core::color::Color, databuf::DataBuf};
 use crate::core::math::Rectangle;
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
