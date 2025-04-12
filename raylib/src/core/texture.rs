@@ -1,6 +1,6 @@
 //! Image and texture related functions
 
-use crate::core::color::Color;
+use crate::{core::color::Color, prelude::DataBuf};
 use crate::core::math::Rectangle;
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
@@ -12,8 +12,8 @@ use std::ptr::{null, null_mut};
 
 use super::{error::{InvalidImageError, LoadTextureError, UpdateTextureError}, math::Vector2};
 
-make_rslice!(ImagePalette, Color, ffi::UnloadImagePalette);
-make_rslice!(ImageColors, Color, ffi::UnloadImageColors);
+pub type ImagePalette = DataBuf<Color>; // ffi::UnloadImagePalette just calls RL_FREE
+pub type ImageColors = DataBuf<Color>; // ffi::UnloadImageColors just calls RL_FREE
 
 /// NPatchInfo, n-patch layout info
 #[repr(C)]
@@ -272,9 +272,7 @@ impl Image {
         unsafe {
             let image_data = ffi::LoadImageColors(self.0);
             let image_data_len = (self.width * self.height) as usize;
-            ImageColors(ManuallyDrop::new(Box::from_raw(
-                std::slice::from_raw_parts_mut(image_data as *mut _, image_data_len),
-            )))
+            ImageColors::new(image_data.cast(), image_data_len).unwrap()
         }
     }
 
@@ -285,9 +283,7 @@ impl Image {
             let mut palette_len = 0;
             let image_data =
                 ffi::LoadImagePalette(self.0, max_palette_size as i32, &mut palette_len);
-            ImagePalette(ManuallyDrop::new(Box::from_raw(
-                std::slice::from_raw_parts_mut(image_data as *mut _, palette_len as usize),
-            )))
+            ImagePalette::new(image_data.cast(), palette_len as usize).unwrap()
         }
     }
 

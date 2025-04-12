@@ -1,9 +1,62 @@
 //! Data manipulation functions. Compress and Decompress with DEFLATE
 use std::{
-    alloc::Layout, ffi::{c_char, CString}, ops::{Deref, DerefMut}, path::Path, ptr::NonNull
+    alloc::Layout, ffi::{c_char, CString}, marker::PhantomData, ops::{Deref, DerefMut}, path::Path, ptr::NonNull
 };
 
-use crate::{ffi, error::{AllocationError, CompressionError}};
+use crate::{
+    error::{AllocationError, CompressionError},
+    ffi,
+};
+
+#[doc(hidden)]
+pub trait MemAllocator: MemDeallocator {
+    unsafe fn alloc(layout: Layout) -> Option<NonNull<u8>>;
+
+    #[inline]
+    unsafe fn realloc(ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -> Result<NonNull<u8>, NonNull<u8>> {
+        let new_ptr = unsafe { Self::alloc(new_layout) };
+        if let Some(new_ptr) = new_ptr {
+            unsafe {
+                std::ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_layout.size().min(new_layout.size()));
+            }
+            Self::free(ptr, old_layout);
+            Ok(new_ptr)
+        } else {
+            Err(ptr)
+        }
+    }
+}
+
+#[doc(hidden)]
+pub trait MemDeallocator {
+    unsafe fn free(ptr: NonNull<u8>, layout: Layout);
+}
+
+#[doc(hidden)]
+pub struct RaylibInternalAllocator;
+impl MemDeallocator for RaylibInternalAllocator {
+    /// Internal memory free
+    #[inline]
+    unsafe fn free(ptr: NonNull<u8>, _layout: Layout) {
+        unsafe {
+            ffi::MemFree(ptr.as_ptr().cast());
+        }
+    }
+}
+impl MemAllocator for RaylibInternalAllocator {
+    /// Internal memory allocator
+    #[inline]
+    unsafe fn alloc(layout: Layout) -> Option<NonNull<u8>> {
+        NonNull::new(unsafe { ffi::MemAlloc(layout.size() as u32) }.cast())
+    }
+
+    /// Internal memory reallocator
+    #[inline]
+    unsafe fn realloc(ptr: NonNull<u8>, _old_layout: Layout, new_layout: Layout) -> Result<NonNull<u8>, NonNull<u8>> {
+        NonNull::new(unsafe { ffi::MemRealloc(ptr.as_ptr().cast(), new_layout.size() as u32) }.cast())
+            .ok_or(ptr)
+    }
+}
 
 /// A wrapper acting as an owned buffer for Raylib-allocated memory.
 /// Automatically releases the memory with [`ffi::MemFree()`] when dropped.
@@ -20,44 +73,54 @@ use crate::{ffi, error::{AllocationError, CompressionError}};
 /// let expected: &[u8] = &[1, 5, 0, 250, 255, 49, 49, 49, 49, 49];
 /// assert_eq!(data, expected);
 /// ```
-#[derive(Debug)]
-pub struct DataBuf<T: Copy> {
+pub struct DataBuf<T: Copy, A: MemDeallocator = RaylibInternalAllocator> {
     buf: NonNull<T>,
     len: usize,
+    _alloc: PhantomData<A>,
 }
-impl<T: Copy> Drop for DataBuf<T> {
+impl<T: Copy + std::fmt::Debug, A: MemDeallocator> std::fmt::Debug for DataBuf<T, A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&**self, f)
+    }
+}
+impl<T: Copy, A: MemDeallocator> Drop for DataBuf<T, A> {
     fn drop(&mut self) {
         unsafe {
-            ffi::MemFree(self.buf.as_ptr().cast());
+            A::free(self.buf.cast(), self.layout());
         }
     }
 }
-impl<T: Copy> Deref for DataBuf<T> {
+impl<T: Copy, A: MemDeallocator> Deref for DataBuf<T, A> {
     type Target = [T];
     fn deref(&self) -> &Self::Target {
         // This is safe because DataBuf contents are checked everywhere `buf` can be set.
         unsafe { &*std::ptr::slice_from_raw_parts(self.buf.as_ptr(), self.len) }
     }
 }
-impl<T: Copy> DerefMut for DataBuf<T> {
+impl<T: Copy, A: MemDeallocator> DerefMut for DataBuf<T, A> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // This is safe because DataBuf contents are checked everywhere `buf` can be set.
         unsafe { &mut *std::ptr::slice_from_raw_parts_mut(self.buf.as_ptr(), self.len) }
     }
 }
-impl<T: Copy> AsRef<[T]> for DataBuf<T> {
+impl<T: Copy, A: MemDeallocator> AsRef<[T]> for DataBuf<T, A> {
     #[inline]
     fn as_ref(&self) -> &[T] {
         self.deref()
     }
 }
-impl<T: Copy> AsMut<[T]> for DataBuf<T> {
+impl<T: Copy, A: MemDeallocator> AsMut<[T]> for DataBuf<T, A> {
     #[inline]
     fn as_mut(&mut self) -> &mut [T] {
         self.deref_mut()
     }
 }
-impl<T: Copy> DataBuf<T> {
+impl<T: Copy, A: MemDeallocator> DataBuf<T, A> {
+    #[inline]
+    fn layout(&self) -> Layout {
+        Layout::array::<T>(self.len).expect("DataBuf layout should always be valid")
+    }
+
     /// Wrap an already allocated pointer in a `DataBuf`.
     ///
     /// **Note:** This method is only intended for use with pointers given by Raylib
@@ -79,7 +142,7 @@ impl<T: Copy> DataBuf<T> {
     /// - `count` is less than 1
     /// - `buf` is unaligned
     /// - total bytes exceed [`isize::MAX`]
-    pub(crate) fn new(buf: *mut T, count: i32) -> Option<Self> {
+    pub(crate) fn new(buf: *mut T, count: usize) -> Option<Self> {
         NonNull::new(buf).map(|buf| {
             // Ensure DataBuf can always be dereferenced as a slice.
             assert!(count >= 1, "non-null data should be at least 1 byte");
@@ -89,7 +152,7 @@ impl<T: Copy> DataBuf<T> {
                 .is_some_and(|total_size| total_size <= (isize::MAX as usize)),
                 "total size of DataBuf should not exceed `isize::MAX`");
 
-            Self { buf, len: count as usize }
+            Self { buf, len: count as usize, _alloc: PhantomData }
         })
     }
 
@@ -100,7 +163,9 @@ impl<T: Copy> DataBuf<T> {
         std::mem::forget(self);
         (buf, len)
     }
+}
 
+impl<T: Copy, A: MemAllocator> DataBuf<T, A> {
     /// Allocate new memory managed by Raylib
     ///
     /// # Errors
@@ -120,9 +185,9 @@ impl<T: Copy> DataBuf<T> {
                 Ok(layout) => {
                     let size = layout.size();
                     if size <= u32::MAX as usize {
-                        if let Some(buf) = NonNull::new(unsafe { ffi::MemAlloc(size as u32) }.cast()) {
+                        if let Some(buf) = unsafe { A::alloc(layout) }.map(|p| p.cast()) {
                             assert!(buf.is_aligned(), "allocated buffer should always be aligned");
-                            Ok(Self { buf, len: count })
+                            Ok(Self { buf, len: count, _alloc: PhantomData })
                         } else { Err(AllocationError::ExceedsCapacity) }
                     } else { Err(AllocationError::ExceedsUIntMax) }
                 }
@@ -143,7 +208,7 @@ impl<T: Copy> DataBuf<T> {
     /// # Panics
     ///
     /// This method may panic if the pointer returned by [`ffi::MemRealloc`] is unaligned.
-    pub fn realloc(&mut self, new_count: i32) -> Result<(), AllocationError> {
+    pub fn realloc(&mut self, new_count: usize) -> Result<(), AllocationError> {
         if new_count >= 1 {
             let new_count = new_count as usize;
             match Layout::array::<T>(new_count) {
@@ -151,7 +216,7 @@ impl<T: Copy> DataBuf<T> {
                 Ok(layout) => {
                     let size = layout.size();
                     if size <= u32::MAX as usize {
-                        if let Some(buf) = NonNull::new(unsafe { ffi::MemRealloc(self.buf.as_ptr().cast(), size as u32) }.cast()) {
+                        if let Ok(buf) = unsafe { A::realloc(self.buf.cast(), self.layout(), layout) }.map(|p| p.cast()) {
                             assert!(buf.is_aligned(), "allocated buffer should always be aligned");
                             self.buf = buf;
                             self.len = new_count;
@@ -177,7 +242,7 @@ pub fn compress_data(data: &[u8]) -> Result<DataBuf<u8>, CompressionError> {
     let buffer = {
         unsafe { ffi::CompressData(data.as_ptr() as *mut _, data.len() as i32, &mut out_length) }
     };
-    DataBuf::new(buffer, out_length)
+    DataBuf::new(buffer, out_length as usize)
         .ok_or_else(|| CompressionError::CompressionFailed)
 }
 
@@ -198,7 +263,7 @@ pub fn decompress_data(data: &[u8]) -> Result<DataBuf<u8>, CompressionError> {
     let buffer = {
         unsafe { ffi::DecompressData(data.as_ptr() as *mut _, data.len() as i32, &mut out_length) }
     };
-    DataBuf::new(buffer, out_length)
+    DataBuf::new(buffer, out_length as usize)
         .ok_or_else(|| CompressionError::CompressionFailed)
 }
 

@@ -14,7 +14,7 @@ Permission is granted to anyone to use this software for any purpose, including 
   3. This notice may not be removed or altered from any source distribution.
 */
 
-use crate::ffi;
+use crate::{ffi, prelude::DataBuf};
 use crate::misc::AsF32;
 use std::f32::consts::PI;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Range, Sub, SubAssign};
@@ -22,7 +22,7 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Range, Sub, 
 #[cfg(feature = "with_serde")]
 use serde::{Deserialize, Serialize};
 
-make_rslice!(RSliceVec4, Vector4, ffi::MemFree);
+pub type RSliceVec4 = DataBuf<Vector4>;
 
 macro_rules! optional_serde_struct {
     ($def:item) => {

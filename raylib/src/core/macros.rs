@@ -116,54 +116,23 @@ macro_rules! deref_impl_wrapper {
         }
     };
 }
-macro_rules! make_rslice {
-    ($(#[$attrs:meta])* $name:ident, $t:ty, $dropfunc:expr) => {
-        $(#[$attrs])*
-        #[repr(transparent)]
-        #[derive(Debug)]
-        pub struct $name(pub(crate) std::mem::ManuallyDrop<std::boxed::Box<[$t]>>);
 
-        impl_rslice!($name, std::boxed::Box<[$t]>, $dropfunc, 0);
-    };
-}
-
-macro_rules! impl_rslice {
-    ($name:ident, $t:ty, $dropfunc:expr, $rawfield:tt) => {
-        impl Drop for $name {
-            #[allow(unused_unsafe)]
-            fn drop(&mut self) {
+macro_rules! make_data_buffer {
+    ($(#[$attrs:meta])* $Name:ident, [$T:ty], $Deallocator:ident, $dealloc:expr) => {
+        #[doc(hidden)]
+        pub struct $Deallocator;
+        impl $crate::data::MemDeallocator for $Deallocator {
+            #[inline]
+            unsafe fn free(ptr: std::ptr::NonNull<u8>, _layout: std::alloc::Layout) {
                 unsafe {
-                    let inner = std::mem::ManuallyDrop::take(&mut self.0);
-                    ($dropfunc)(std::boxed::Box::leak(inner).as_mut_ptr() as *mut _);
+                    $dealloc(ptr.as_ptr().cast());
                 }
             }
         }
-
-        impl std::convert::AsRef<$t> for $name {
-            fn as_ref(&self) -> &$t {
-                &self.$rawfield
-            }
-        }
-
-        impl std::convert::AsMut<$t> for $name {
-            fn as_mut(&mut self) -> &mut $t {
-                &mut self.$rawfield
-            }
-        }
-
-        impl std::ops::Deref for $name {
-            type Target = $t;
-            #[inline]
-            fn deref(&self) -> &Self::Target {
-                &self.$rawfield
-            }
-        }
-
-        impl std::ops::DerefMut for $name {
-            #[inline]
-            fn deref_mut(&mut self) -> &mut Self::Target {
-                &mut self.$rawfield
-            }
-        }
+        make_data_buffer!($(#[$attrs])* $Name, [$T], $Deallocator);
+    };
+    ($(#[$attrs:meta])* $Name:ident, [$T:ty]$(, $Deallocator:ty)?) => {
+        $(#[$attrs])*
+        pub type $Name = $crate::data::DataBuf<$T$(, $Deallocator)?>;
     };
 }
