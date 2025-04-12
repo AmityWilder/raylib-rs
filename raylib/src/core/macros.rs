@@ -118,21 +118,28 @@ macro_rules! deref_impl_wrapper {
 }
 
 macro_rules! make_data_buffer {
-    ($(#[$attrs:meta])* $Name:ident, [$T:ty], $Deallocator:ident, $dealloc:expr) => {
+    ($(#[$attrs:meta])* $Name:ident, [$T:ty], $Allocator:ident, $(#[$fn_attr:meta])* |$self:ident, $ptr:ident, $count:ident| $dealloc:expr $(,)?) => {
         #[doc(hidden)]
-        pub struct $Deallocator;
-        impl $crate::data::MemDeallocator for $Deallocator {
+        pub struct $Allocator;
+        impl $crate::data::MemFree<$T> for $Allocator {
             #[inline]
-            unsafe fn free(ptr: std::ptr::NonNull<u8>, _layout: std::alloc::Layout) {
+            #[allow(unused_unsafe)]
+            $($fn_attr)*
+            unsafe fn free(&mut $self, $ptr: std::ptr::NonNull<$T>, $count: std::num::NonZeroUsize) {
+                let $ptr = $ptr.as_ptr().cast();
+                let $count = $count.get();
                 unsafe {
-                    $dealloc(ptr.as_ptr().cast());
+                    $dealloc;
                 }
             }
         }
-        make_data_buffer!($(#[$attrs])* $Name, [$T], $Deallocator);
+        impl $crate::data::GlobalMemFree for $Allocator {
+            const GLOBAL: Self = Self;
+        }
+        make_data_buffer!($(#[$attrs])* $Name, [$T], $Allocator);
     };
-    ($(#[$attrs:meta])* $Name:ident, [$T:ty]$(, $Deallocator:ty)?) => {
+    ($(#[$attrs:meta])* $Name:ident, [$T:ty]$(, $Allocator:ty)? $(,)?) => {
         $(#[$attrs])*
-        pub type $Name = $crate::data::DataBuf<$T$(, $Deallocator)?>;
+        pub type $Name = $crate::data::DataBuf<$T$(, $Allocator)?>;
     };
 }

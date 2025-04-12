@@ -1,6 +1,6 @@
 //! Data manipulation functions. Compress and Decompress with DEFLATE
 use std::{
-    alloc::Layout, ffi::{c_char, CString}, marker::PhantomData, ops::{Deref, DerefMut}, path::Path, ptr::NonNull
+    alloc::Layout, convert::TryFrom, ffi::{c_char, CString}, marker::PhantomData, num::NonZeroUsize, ops::{Deref, DerefMut}, path::Path, ptr::NonNull
 };
 
 use crate::{
@@ -8,53 +8,116 @@ use crate::{
     ffi,
 };
 
+/// A trait for providing the deallocate function for a raylib-allocated array.
 #[doc(hidden)]
-pub trait MemAllocator: MemDeallocator {
-    unsafe fn alloc(layout: Layout) -> Option<NonNull<u8>>;
+pub trait MemFree<T> {
+    /// Release the pointer
+    ///
+    /// # Guarantees
+    /// Specific panics and safety allowances may change depending on implementation, but safety and non-panic **must** be guaranteed in all implementations if **all** of the following conditions are true:
+    /// - `ptr` was allocated by the *exact* allocator (generic argument included) intended for this deallocator; typically either a `Load` function or *the* `MemAllocator` implementation attached to the same instance
+    /// - `ptr` has not been freed yet
+    /// - `count` accurately describes how many instances of `T` are stored in `ptr`
+    /// - `count` does not exceed [`i32::MAX`] (some implementations may allow greater, but this is the universal minimum)
+    /// - `std::mem::size::<[T; count]>()` does not exceed [`isize::MAX`]
+    unsafe fn free(&mut self, ptr: NonNull<T>, count: NonZeroUsize);
+}
 
-    #[inline]
-    unsafe fn realloc(ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -> Result<NonNull<u8>, NonNull<u8>> {
-        let new_ptr = unsafe { Self::alloc(new_layout) };
-        if let Some(new_ptr) = new_ptr {
-            unsafe {
-                std::ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_layout.size().min(new_layout.size()));
-            }
-            Self::free(ptr, old_layout);
-            Ok(new_ptr)
-        } else {
-            Err(ptr)
-        }
-    }
+pub trait GlobalMemFree {
+    const GLOBAL: Self;
+}
+
+/// A trait for providing the allocate function for a raylib-allocated array.
+///
+/// **Note:** This should *only* be implemented if the user is intended to be able to allocate their own resources through this allocator (this is very rare).
+#[doc(hidden)]
+pub trait MemAlloc<T>: MemFree<T> {
+    /// Reserve new memory
+    ///
+    /// # Guarantees
+    /// - The memory must always be aligned
+    /// - `count` must accurately describe the number of `T` stored in the return, not the number of bytes
+    unsafe fn alloc(&mut self, count: NonZeroUsize) -> Option<NonNull<T>>;
+}
+
+/// A trait for providing the reallocate function for a raylib-allocated array.
+///
+/// **Note:** This should *only* be implemented if the buffer length is intended to be modifiable by the user (this is very rare).
+#[doc(hidden)]
+pub trait MemRealloc<T>: MemAlloc<T> {
+    unsafe fn realloc(&mut self, ptr: NonNull<T>, old_count: NonZeroUsize, new_count: NonZeroUsize) -> Result<NonNull<T>, NonNull<T>>;
 }
 
 #[doc(hidden)]
-pub trait MemDeallocator {
-    unsafe fn free(ptr: NonNull<u8>, layout: Layout);
-}
-
-#[doc(hidden)]
-pub struct RaylibInternalAllocator;
-impl MemDeallocator for RaylibInternalAllocator {
+pub struct RaylibAllocator;
+impl<T> MemFree<T> for RaylibAllocator {
     /// Internal memory free
     #[inline]
-    unsafe fn free(ptr: NonNull<u8>, _layout: Layout) {
+    unsafe fn free(&mut self, ptr: NonNull<T>, _count: NonZeroUsize) {
         unsafe {
             ffi::MemFree(ptr.as_ptr().cast());
         }
     }
 }
-impl MemAllocator for RaylibInternalAllocator {
+impl<T> MemAlloc<T> for RaylibAllocator {
     /// Internal memory allocator
     #[inline]
-    unsafe fn alloc(layout: Layout) -> Option<NonNull<u8>> {
-        NonNull::new(unsafe { ffi::MemAlloc(layout.size() as u32) }.cast())
+    unsafe fn alloc(&mut self, count: NonZeroUsize) -> Option<NonNull<T>> {
+        let layout = Layout::array::<T>(count.get()).expect("failed to produce memory layout");
+        let size = u32::try_from(layout.size()).expect("usize out of bounds for u32");
+        NonNull::new(unsafe { ffi::MemAlloc(size) }.cast())
     }
-
+}
+impl<T> MemRealloc<T> for RaylibAllocator {
     /// Internal memory reallocator
     #[inline]
-    unsafe fn realloc(ptr: NonNull<u8>, _old_layout: Layout, new_layout: Layout) -> Result<NonNull<u8>, NonNull<u8>> {
-        NonNull::new(unsafe { ffi::MemRealloc(ptr.as_ptr().cast(), new_layout.size() as u32) }.cast())
-            .ok_or(ptr)
+    unsafe fn realloc(&mut self, ptr: NonNull<T>, _old_count: NonZeroUsize, new_count: NonZeroUsize) -> Result<NonNull<T>, NonNull<T>> {
+        let layout = Layout::array::<T>(new_count.get()).expect("failed to produce memory layout");
+        let size = u32::try_from(layout.size()).expect("usize out of bounds for u32");
+        NonNull::new(unsafe { ffi::MemRealloc(ptr.as_ptr().cast(), size) }.cast()).ok_or(ptr)
+    }
+}
+impl GlobalMemFree for RaylibAllocator {
+    const GLOBAL: Self = Self;
+}
+
+struct RawDataBuf<T> {
+    buf: NonNull<T>,
+    count: NonZeroUsize,
+    _marker: PhantomData<[T]>,
+}
+impl<T: std::fmt::Debug> std::fmt::Debug for RawDataBuf<T> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&**self, f)
+    }
+}
+impl<T> Deref for RawDataBuf<T> {
+    type Target = [T];
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        // This is safe because RawDataBuf contents are checked everywhere `buf` can be set.
+        unsafe { &*std::ptr::slice_from_raw_parts(self.buf.as_ptr(), self.count.get()) }
+    }
+}
+impl<T> DerefMut for RawDataBuf<T> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // This is safe because RawDataBuf contents are checked everywhere `buf` can be set.
+        unsafe { &mut *std::ptr::slice_from_raw_parts_mut(self.buf.as_ptr(), self.count.get()) }
+    }
+}
+impl<T> AsRef<[T]> for RawDataBuf<T> {
+    #[inline]
+    fn as_ref(&self) -> &[T] {
+        self.deref()
+    }
+}
+impl<T> AsMut<[T]> for RawDataBuf<T> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut [T] {
+        self.deref_mut()
     }
 }
 
@@ -73,54 +136,52 @@ impl MemAllocator for RaylibInternalAllocator {
 /// let expected: &[u8] = &[1, 5, 0, 250, 255, 49, 49, 49, 49, 49];
 /// assert_eq!(data, expected);
 /// ```
-pub struct DataBuf<T: Copy, A: MemDeallocator = RaylibInternalAllocator> {
-    buf: NonNull<T>,
-    len: usize,
-    _alloc: PhantomData<A>,
+pub struct DataBuf<T, A: MemFree<T> = RaylibAllocator> {
+    inner: Option<RawDataBuf<T>>,
+    alloc: A,
 }
-impl<T: Copy + std::fmt::Debug, A: MemDeallocator> std::fmt::Debug for DataBuf<T, A> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&**self, f)
-    }
-}
-impl<T: Copy, A: MemDeallocator> Drop for DataBuf<T, A> {
+impl<T, A: MemFree<T>> Drop for DataBuf<T, A> {
     fn drop(&mut self) {
-        unsafe {
-            A::free(self.buf.cast(), self.layout());
+        if let Some(inner) = self.inner.take() {
+            unsafe {
+                self.alloc.free(inner.buf.cast(), inner.count);
+            }
         }
     }
 }
-impl<T: Copy, A: MemDeallocator> Deref for DataBuf<T, A> {
+impl<T: std::fmt::Debug, A: MemFree<T>> std::fmt::Debug for DataBuf<T, A> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.as_ref(), f)
+    }
+}
+impl<T, A: MemFree<T>> Deref for DataBuf<T, A> {
     type Target = [T];
+
+    #[inline]
     fn deref(&self) -> &Self::Target {
-        // This is safe because DataBuf contents are checked everywhere `buf` can be set.
-        unsafe { &*std::ptr::slice_from_raw_parts(self.buf.as_ptr(), self.len) }
+        self.inner.as_ref().map_or(&[], |inner| inner.deref())
     }
 }
-impl<T: Copy, A: MemDeallocator> DerefMut for DataBuf<T, A> {
+impl<T, A: MemFree<T>> DerefMut for DataBuf<T, A> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        // This is safe because DataBuf contents are checked everywhere `buf` can be set.
-        unsafe { &mut *std::ptr::slice_from_raw_parts_mut(self.buf.as_ptr(), self.len) }
+        self.inner.as_mut().map_or(&mut [], |inner| inner.deref_mut())
     }
 }
-impl<T: Copy, A: MemDeallocator> AsRef<[T]> for DataBuf<T, A> {
+impl<T, A: MemFree<T>> AsRef<[T]> for DataBuf<T, A> {
     #[inline]
     fn as_ref(&self) -> &[T] {
         self.deref()
     }
 }
-impl<T: Copy, A: MemDeallocator> AsMut<[T]> for DataBuf<T, A> {
+impl<T, A: MemFree<T>> AsMut<[T]> for DataBuf<T, A> {
     #[inline]
     fn as_mut(&mut self) -> &mut [T] {
         self.deref_mut()
     }
 }
-impl<T: Copy, A: MemDeallocator> DataBuf<T, A> {
-    #[inline]
-    fn layout(&self) -> Layout {
-        Layout::array::<T>(self.len).expect("DataBuf layout should always be valid")
-    }
-
+impl<T, A: MemFree<T>> DataBuf<T, A> {
     /// Wrap an already allocated pointer in a `DataBuf`.
     ///
     /// **Note:** This method is only intended for use with pointers given by Raylib
@@ -142,30 +203,28 @@ impl<T: Copy, A: MemDeallocator> DataBuf<T, A> {
     /// - `count` is less than 1
     /// - `buf` is unaligned
     /// - total bytes exceed [`isize::MAX`]
-    pub(crate) fn new(buf: *mut T, count: usize) -> Option<Self> {
-        NonNull::new(buf).map(|buf| {
-            // Ensure DataBuf can always be dereferenced as a slice.
-            assert!(count >= 1, "non-null data should be at least 1 byte");
-            assert!(buf.is_aligned(), "DataBuf should be aligned");
-            assert!(std::mem::size_of::<T>()
-                .checked_mul(count as usize)
-                .is_some_and(|total_size| total_size <= (isize::MAX as usize)),
-                "total size of DataBuf should not exceed `isize::MAX`");
-
-            Self { buf, len: count as usize, _alloc: PhantomData }
-        })
+    pub(crate) fn from_raw_in(buf: *mut T, count: usize, alloc: A) -> Option<Self> {
+        if let Some(count) = NonZeroUsize::new(count) {
+            NonNull::new(buf).map(|buf| {
+                assert!(Layout::array::<T>(count.get()).is_ok(), "DataBuf must be compatible with a slice to be constructed");
+                Self { inner: Some(RawDataBuf { buf, count, _marker: PhantomData }), alloc }
+            })
+        } else {
+            // Empty buffer doesn't require an allocator
+            Some(Self { inner: None, alloc })
+        }
     }
 
-    /// Extract the pointer without freeing it, for the purpose of passing it to a function that will deallocate it manually.
-    pub(crate) fn leak(self) -> (NonNull<T>, usize) {
-        let buf = self.buf;
-        let len = self.len;
-        std::mem::forget(self);
-        (buf, len)
+    /// Extract the pointer without freeing it, for the purpose of converting it to another type with its own deallocation (that deallocates the memory as a step).
+    ///
+    /// Returns [`None`] if the allocation is empty.
+    ///
+    /// If you're putting this in a drop function, consider making a custom [`MemFree`] instead.
+    pub(crate) fn take(mut self) -> Option<(NonNull<T>, NonZeroUsize)> {
+        self.inner.take().map(|inner| (inner.buf, inner.count))
     }
 }
-
-impl<T: Copy, A: MemAllocator> DataBuf<T, A> {
+impl<T, A: MemAlloc<T>> DataBuf<T, A> {
     /// Allocate new memory managed by Raylib
     ///
     /// # Errors
@@ -177,24 +236,17 @@ impl<T: Copy, A: MemAllocator> DataBuf<T, A> {
     /// # Panics
     ///
     /// This method may panic if the pointer returned by [`ffi::MemAlloc`] is unaligned.
-    pub fn alloc(count: i32) -> Result<Self, AllocationError> {
-        if count >= 1 {
-            let count = count as usize;
-            match Layout::array::<T>(count) {
-                Err(_e) => Err(AllocationError::InvalidLayout), // I would like to display `e` if possible
-                Ok(layout) => {
-                    let size = layout.size();
-                    if size <= u32::MAX as usize {
-                        if let Some(buf) = unsafe { A::alloc(layout) }.map(|p| p.cast()) {
-                            assert!(buf.is_aligned(), "allocated buffer should always be aligned");
-                            Ok(Self { buf, len: count, _alloc: PhantomData })
-                        } else { Err(AllocationError::ExceedsCapacity) }
-                    } else { Err(AllocationError::ExceedsUIntMax) }
-                }
-            }
-        } else { Err(AllocationError::SubMinSize) }
+    pub fn alloc_in(count: usize, mut alloc: A) -> Result<Self, AllocationError> {
+        if let Some(count) = NonZeroUsize::new(count) {
+            if let Some(buf) = unsafe { alloc.alloc(count) }.map(NonNull::cast) {
+                Ok(Self { inner: Some(RawDataBuf { buf, count, _marker: PhantomData }), alloc })
+            } else { Err(AllocationError::InvalidLayout) }
+        } else {
+            Ok(Self { inner: None, alloc })
+        }
     }
-
+}
+impl<T, A: MemRealloc<T>> DataBuf<T, A> {
     /// Reallocate memory already managed by Raylib
     ///
     /// # Errors
@@ -209,23 +261,38 @@ impl<T: Copy, A: MemAllocator> DataBuf<T, A> {
     ///
     /// This method may panic if the pointer returned by [`ffi::MemRealloc`] is unaligned.
     pub fn realloc(&mut self, new_count: usize) -> Result<(), AllocationError> {
-        if new_count >= 1 {
-            let new_count = new_count as usize;
-            match Layout::array::<T>(new_count) {
-                Err(_e) => Err(AllocationError::InvalidLayout), // I would like to display `e` if possible
-                Ok(layout) => {
-                    let size = layout.size();
-                    if size <= u32::MAX as usize {
-                        if let Ok(buf) = unsafe { A::realloc(self.buf.cast(), self.layout(), layout) }.map(|p| p.cast()) {
-                            assert!(buf.is_aligned(), "allocated buffer should always be aligned");
-                            self.buf = buf;
-                            self.len = new_count;
-                            Ok(())
-                        } else { Err(AllocationError::ExceedsCapacity) }
-                    } else { Err(AllocationError::ExceedsUIntMax) }
-                }
+        if let Some(new_count) = NonZeroUsize::new(new_count) {
+            let new_buf = if let Some(inner) = &mut self.inner {
+                unsafe { self.alloc.realloc(inner.buf, inner.count, new_count) }.ok()
+            } else {
+                unsafe { self.alloc.alloc(new_count) }
+            };
+            self.inner = Some(RawDataBuf {
+                buf: new_buf.ok_or(AllocationError::ExceedsCapacity)?,
+                count: new_count,
+                _marker: PhantomData,
+            });
+        } else if let Some(inner) = &mut self.inner {
+            let buf = inner.buf;
+            let count = inner.count;
+            unsafe {
+                self.alloc.free(buf, count);
             }
-        } else { Err(AllocationError::SubMinSize) }
+            self.inner = None;
+        }
+        Ok(())
+    }
+}
+impl<T, A: MemFree<T> + GlobalMemFree> DataBuf<T, A> {
+    #[inline]
+    pub(crate) fn from_raw(buf: *mut T, count: usize) -> Option<Self> {
+        Self::from_raw_in(buf, count, A::GLOBAL)
+    }
+}
+impl<T, A: MemAlloc<T> + GlobalMemFree> DataBuf<T, A> {
+    #[inline]
+    pub fn alloc(count: usize) -> Result<Self, AllocationError> {
+        Self::alloc_in(count, A::GLOBAL)
     }
 }
 
@@ -242,7 +309,7 @@ pub fn compress_data(data: &[u8]) -> Result<DataBuf<u8>, CompressionError> {
     let buffer = {
         unsafe { ffi::CompressData(data.as_ptr() as *mut _, data.len() as i32, &mut out_length) }
     };
-    DataBuf::new(buffer, out_length as usize)
+    DataBuf::from_raw(buffer, out_length as usize)
         .ok_or_else(|| CompressionError::CompressionFailed)
 }
 
@@ -263,7 +330,7 @@ pub fn decompress_data(data: &[u8]) -> Result<DataBuf<u8>, CompressionError> {
     let buffer = {
         unsafe { ffi::DecompressData(data.as_ptr() as *mut _, data.len() as i32, &mut out_length) }
     };
-    DataBuf::new(buffer, out_length as usize)
+    DataBuf::from_raw(buffer, out_length as usize)
         .ok_or_else(|| CompressionError::CompressionFailed)
 }
 

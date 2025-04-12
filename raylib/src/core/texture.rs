@@ -272,7 +272,7 @@ impl Image {
         unsafe {
             let image_data = ffi::LoadImageColors(self.0);
             let image_data_len = (self.width * self.height) as usize;
-            ImageColors::new(image_data.cast(), image_data_len).unwrap()
+            ImageColors::from_raw(image_data.cast(), image_data_len).unwrap()
         }
     }
 
@@ -283,7 +283,7 @@ impl Image {
             let mut palette_len = 0;
             let image_data =
                 ffi::LoadImagePalette(self.0, max_palette_size as i32, &mut palette_len);
-            ImagePalette::new(image_data.cast(), palette_len as usize).unwrap()
+            ImagePalette::from_raw(image_data.cast(), palette_len as usize).unwrap()
         }
     }
 

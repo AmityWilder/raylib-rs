@@ -4,46 +4,30 @@ use crate::core::texture::Image;
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
 use std::ffi::CString;
-use std::ops::{Deref, DerefMut, Range};
-use std::usize;
+use std::ops::Range;
 
-/// Struct for holding the result of RaylibHandle::load_random_sequence.
-/// This is a thin wrapper for an array of i32. The reason it exists is because Raylib expects you
-/// to unload the sequence it creates manually, and this struct does it for you.
-pub struct RandomSequence<'a>(&'a mut [i32]);
+make_data_buffer!(
+    /// Struct for holding the result of RaylibHandle::load_random_sequence.
+    /// This is a thin wrapper for an array of i32. The reason it exists is because Raylib expects you
+    /// to unload the sequence it creates manually, and this struct does it for you.
+    RandomSequence,
+    [i32],
+    RandomSequenceAllocator,
+    |self, ptr, _count| ffi::UnloadRandomSequence(ptr)
+);
 
-impl<'a> Deref for RandomSequence<'a> {
-    type Target = [i32];
-
-    fn deref(&self) -> &Self::Target {
-        self.0
-    }
-}
-
-impl<'a> DerefMut for RandomSequence<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<'a> Drop for RandomSequence<'a> {
-    fn drop(&mut self) {
-        unsafe { ffi::UnloadRandomSequence(self.0.as_mut_ptr()) }
-    }
-}
-
-impl<'a> IntoIterator for RandomSequence<'a> {
+impl IntoIterator for RandomSequence {
     type Item = i32;
 
-    type IntoIter = RandSeqIterator<'a>;
+    type IntoIter = RandSeqIterator;
 
     fn into_iter(self) -> Self::IntoIter {
         RandSeqIterator(self, 0)
     }
 }
-pub struct RandSeqIterator<'a>(RandomSequence<'a>, usize);
+pub struct RandSeqIterator(RandomSequence, usize);
 
-impl<'a> Iterator for RandSeqIterator<'a> {
+impl Iterator for RandSeqIterator {
     type Item = i32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -71,10 +55,10 @@ pub fn open_url(url: &str) {
 
 impl RaylibHandle {
     /// Load random values sequence, no values repeated
-    pub fn load_random_sequence<'a>(&self, num: Range<i32>, count: u32) -> RandomSequence<'a> {
+    pub fn load_random_sequence(&self, num: Range<i32>, count: u32) -> RandomSequence {
         unsafe {
             let ptr = ffi::LoadRandomSequence(count, num.start, num.end.into());
-            RandomSequence(std::slice::from_raw_parts_mut(ptr, count as usize))
+            RandomSequence::from_raw(ptr, count as usize).expect("LoadRandomSequence returned null")
         }
     }
     /// Load pixels from the screen into a CPU image

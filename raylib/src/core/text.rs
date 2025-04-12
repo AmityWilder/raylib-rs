@@ -12,7 +12,6 @@ use crate::error::LoadFontError;
 use std::convert::{AsMut, AsRef, TryInto};
 use std::ffi::{CString, OsString};
 use std::mem::ManuallyDrop;
-use std::ops::Deref;
 
 fn no_drop<T>(_thing: T) {}
 make_thin_wrapper!(
@@ -29,50 +28,7 @@ make_thin_wrapper!(
     no_drop
 );
 
-#[repr(transparent)]
-#[derive(Debug)]
-pub struct RSliceGlyphInfo(pub(crate) std::mem::ManuallyDrop<std::boxed::Box<[GlyphInfo]>>);
-
-impl Drop for RSliceGlyphInfo {
-    #[allow(unused_unsafe)]
-    fn drop(&mut self) {
-        unsafe {
-            let inner = std::mem::ManuallyDrop::take(&mut self.0);
-            let len = inner.len();
-            ffi::UnloadFontData(
-                std::boxed::Box::leak(inner).as_mut_ptr() as *mut _,
-                len as i32,
-            );
-        }
-    }
-}
-
-impl std::convert::AsRef<Box<[GlyphInfo]>> for RSliceGlyphInfo {
-    fn as_ref(&self) -> &Box<[GlyphInfo]> {
-        &self.0
-    }
-}
-
-impl std::convert::AsMut<Box<[GlyphInfo]>> for RSliceGlyphInfo {
-    fn as_mut(&mut self) -> &mut Box<[GlyphInfo]> {
-        &mut self.0
-    }
-}
-
-impl std::ops::Deref for RSliceGlyphInfo {
-    type Target = Box<[GlyphInfo]>;
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for RSliceGlyphInfo {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
+make_data_buffer!(RSliceGlyphInfo, [GlyphInfo], RSliceGlyphInfoAllocator, |self, ptr, count| ffi::UnloadFontData(ptr, count as i32));
 
 // #[cfg(feature = "nightly")]
 // impl !Send for Font {}
@@ -262,13 +218,7 @@ impl RaylibHandle {
                 ),
             };
             let ci_size = if let Some(c) = chars { c.len() } else { 95 }; // raylib assumes 95 if none given
-            if ci_arr_ptr.is_null() {
-                None
-            } else {
-                Some(RSliceGlyphInfo(std::mem::ManuallyDrop::new(Box::from_raw(
-                    std::slice::from_raw_parts_mut(ci_arr_ptr as *mut _, ci_size),
-                ))))
-            }
+            RSliceGlyphInfo::from_raw(ci_arr_ptr.cast(), ci_size)
         }
     }
 }

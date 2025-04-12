@@ -38,7 +38,7 @@ make_thin_wrapper_lifetime!(
     ffi::UnloadAudioStream
 );
 
-make_data_buffer!(WaveSamples, [f32], WaveSamplesDeallocator, ffi::UnloadWaveSamples);
+make_data_buffer!(WaveSamples, [f32], WaveSamplesAllocator, |self, ptr, _count| ffi::UnloadWaveSamples(ptr));
 
 /// A marker trait specifying an audio sample (`u8`, `i16`, or `f32`).
 pub trait AudioSample {}
@@ -278,10 +278,10 @@ impl<'aud> Wave<'aud> {
     /// NOTE 2: Sample data allocated should be freed with UnloadWaveSamples()
     #[inline]
     pub fn load_samples(&self) -> WaveSamples {
-        WaveSamples::new(
+        WaveSamples::from_raw(
             unsafe { ffi::LoadWaveSamples(self.0) },
             self.frameCount as usize,
-        ).expect("LoadWaveSamples failed to allocate")
+        ).expect("LoadWaveSamples returned null")
     }
 }
 
