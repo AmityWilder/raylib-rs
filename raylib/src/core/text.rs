@@ -8,6 +8,7 @@ use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
 use crate::math::Rectangle;
 use crate::error::LoadFontError;
+use crate::util::IntoCStr;
 
 use std::convert::{AsMut, AsRef, TryInto};
 use std::ffi::{CString, OsString};
@@ -315,12 +316,9 @@ pub trait RaylibFont: AsRef<ffi::Font> + AsMut<ffi::Font> {
     }
 
     /// Export font as code file, returns true on success
-    fn export_font_as_code<A>(&self, filename: A) -> bool
-    where
-        A: Into<OsString>,
-    {
-        let c_str = CString::new(filename.into().to_string_lossy().as_bytes()).unwrap();
-        unsafe { ffi::ExportFontAsCode(*self.as_ref(), c_str.as_ptr()) }
+    fn export_font_as_code(&self, filename: impl IntoCStr) -> bool {
+        let c_str = filename.into_cstr().unwrap();
+        unsafe { ffi::ExportFontAsCode(*self.as_ref(), c_str.as_ref().as_ptr()) }
     }
 
     /// Get glyph font info data for a codepoint (unicode character), fallback to '?' if not found
@@ -342,9 +340,9 @@ pub trait RaylibFont: AsRef<ffi::Font> + AsMut<ffi::Font> {
     }
 
     /// Measures string width in pixels for `font`.
-    fn measure_text(&self, text: &str, font_size: f32, spacing: f32) -> Vector2 {
-        let c_text = CString::new(text).unwrap();
-        unsafe { ffi::MeasureTextEx(*self.as_ref(), c_text.as_ptr(), font_size, spacing).into() }
+    fn measure_text(&self, text: impl IntoCStr, font_size: f32, spacing: f32) -> Vector2 {
+        let c_text = text.into_cstr().unwrap();
+        unsafe { ffi::MeasureTextEx(*self.as_ref(), c_text.as_ref().as_ptr(), font_size, spacing).into() }
     }
 }
 
@@ -354,6 +352,7 @@ impl Font {
         std::mem::forget(self);
         return w;
     }
+
     /// Returns a new `Font` using provided `GlyphInfo` data and parameters.
     fn from_data(
         chars: &[ffi::GlyphInfo],

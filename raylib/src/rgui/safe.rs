@@ -4,6 +4,7 @@ use crate::core::math::{Rectangle, Vector2};
 use crate::core::text::WeakFont;
 use crate::core::RaylibHandle;
 use crate::ffi;
+use crate::util::IntoCStr;
 
 use std::ffi::{c_char, CStr, CString};
 
@@ -481,7 +482,7 @@ pub trait RaylibDrawGui {
         subdivs: i32,
     ) -> (bool, Vector2) {
         let c_text = CString::new(text).unwrap();
-        let mut mouseCell = ffi::Vector2 { x: 0.0, y: 0.0 };
+        let mut mouse_cell = ffi::Vector2 { x: 0.0, y: 0.0 };
         (
             unsafe {
                 ffi::GuiGrid(
@@ -489,10 +490,10 @@ pub trait RaylibDrawGui {
                     c_text.as_ptr(),
                     spacing,
                     subdivs,
-                    &mut mouseCell,
+                    &mut mouse_cell,
                 ) > 0
             },
-            mouseCell.into(),
+            mouse_cell.into(),
         )
     }
     /// List View control, returns selected list item index
@@ -594,14 +595,15 @@ pub trait RaylibDrawGui {
     fn gui_color_picker(
         &mut self,
         bounds: impl Into<ffi::Rectangle>,
-        text: &str,
+        text: impl IntoCStr,
         color: impl Into<ffi::Color>,
     ) -> Color {
         let mut out = color.into();
-        let c_text = CString::new(text).unwrap();
+        let c_text = text.into_cstr().unwrap();
 
-        let result = unsafe { ffi::GuiColorPicker(bounds.into(), c_text.as_ptr(), &mut out) };
-        return out.into();
+        // the integer returned by GuiColorPicker is set to 0 at the start and never gets assigned.
+        _ = unsafe { ffi::GuiColorPicker(bounds.into(), c_text.as_ref().as_ptr(), &mut out) };
+        out.into()
     }
     // Get text with icon id prepended
     // NOTE: Useful to add icons by name id (enum) instead of

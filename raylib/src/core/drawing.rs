@@ -17,7 +17,7 @@ use std::{convert::AsRef, marker::PhantomData};
 use std::ffi::CString;
 
 use super::camera::Camera2D;
-use super::shaders::{Shader, ShaderV};
+use super::shaders::Shader;
 
 /// Seems like all draw commands must be issued from the main thread
 impl RaylibHandle {
