@@ -1,5 +1,5 @@
 //! File manipulation functions. Should be parity with std::fs except on emscripten
-use crate::ffi;
+use crate::{ffi, util::IntoCStr};
 
 use crate::core::RaylibHandle;
 use std::ffi::{c_char, CStr, CString, OsString};
@@ -219,37 +219,28 @@ impl RaylibHandle {
     /// # Errors
     /// This function will return an error if the supplied bytes contain an internal 0 byte. The NulError returned will contain the bytes as well as the position of the nul byte.
     #[must_use]
-    pub fn is_path_file<A>(&self, filename: A) -> bool
-    where
-        A: Into<OsString>,
-    {
-        let c_str = CString::new(filename.into().to_string_lossy().as_bytes()).unwrap();
+    pub fn is_path_file<A>(&self, filename: impl IntoCStr) -> bool {
+        let c_str = filename.into_cstr().unwrap();
         unsafe { ffi::IsPathFile(c_str.as_ptr()) }
     }
 
     /// Load directory filepaths
-    pub fn load_directory_files<A>(&self, dir_path: A) -> FilePathList
-    where
-        A: Into<OsString>,
-    {
+    pub fn load_directory_files(&self, dir_path: impl IntoCStr) -> FilePathList {
         unsafe {
-            let c_str = CString::new(dir_path.into().to_string_lossy().as_bytes()).unwrap(); // .unwrap() is okay here because any nul bytes placed into the actual string should be cleared out by to_string_lossy.
+            let c_str = dir_path.into_cstr().unwrap();
             FilePathList(ffi::LoadDirectoryFiles(c_str.as_ptr()))
         }
     }
 
     /// Load directory filepaths with extension filtering and recursive directory scan
-    pub fn load_directory_files_ex<A>(
+    pub fn load_directory_files_ex(
         &self,
-        dir_path: A,
+        dir_path: impl IntoCStr,
         filter: String,
         scan_sub_dirs: bool,
-    ) -> FilePathList
-    where
-        A: Into<OsString>,
-    {
+    ) -> FilePathList {
         unsafe {
-            let dir_c_str = CString::new(dir_path.into().to_string_lossy().as_bytes()).unwrap(); // .unwrap() is okay here because any nul bytes placed into the actual string should be cleared out by to_string_lossy.
+            let dir_c_str = dir_path.into_cstr().unwrap();
             let filter_c_str = CString::new(filter.replace("\0", "").as_bytes()).unwrap();
             FilePathList(ffi::LoadDirectoryFilesEx(
                 dir_c_str.as_ptr(),
