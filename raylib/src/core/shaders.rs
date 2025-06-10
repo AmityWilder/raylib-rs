@@ -6,8 +6,8 @@ use crate::core::math::Matrix;
 use crate::core::math::{Vector2, Vector3, Vector4};
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
-use std::ffi::CString;
-use std::os::raw::{c_char, c_void};
+use crate::util::IntoCStr;
+use std::os::raw::c_void;
 
 fn no_drop<T>(_thing: T) {}
 make_thin_wrapper!(Shader, ffi::Shader, ffi::UnloadShader);
@@ -23,11 +23,11 @@ impl RaylibHandle {
     pub fn load_shader(
         &mut self,
         _: &RaylibThread,
-        vs_filename: Option<&str>,
-        fs_filename: Option<&str>,
+        vs_filename: Option<impl IntoCStr>,
+        fs_filename: Option<impl IntoCStr>,
     ) -> Shader {
-        let c_vs_filename = vs_filename.map(|f| CString::new(f).unwrap());
-        let c_fs_filename = fs_filename.map(|f| CString::new(f).unwrap());
+        let c_vs_filename = vs_filename.map(|f| f.into_cstr().unwrap());
+        let c_fs_filename = fs_filename.map(|f| f.into_cstr().unwrap());
 
         let vs = c_vs_filename.as_ref().map_or_else(std::ptr::null, |s| s.as_ptr());
         let fs = c_fs_filename.as_ref().map_or_else(std::ptr::null, |s| s.as_ptr());
@@ -39,11 +39,11 @@ impl RaylibHandle {
     pub fn load_shader_from_memory(
         &mut self,
         _: &RaylibThread,
-        vs_code: Option<&str>,
-        fs_code: Option<&str>,
+        vs_code: Option<impl IntoCStr>,
+        fs_code: Option<impl IntoCStr>,
     ) -> Shader {
-        let c_vs_code = vs_code.map(|f| CString::new(f).unwrap());
-        let c_fs_code = fs_code.map(|f| CString::new(f).unwrap());
+        let c_vs_code = vs_code.map(|f| f.into_cstr().unwrap());
+        let c_fs_code = fs_code.map(|f| f.into_cstr().unwrap());
 
         let vs = c_vs_code.as_ref().map_or_else(std::ptr::null, |s| s.as_ptr());
         let fs = c_fs_code.as_ref().map_or_else(std::ptr::null, |s| s.as_ptr());
@@ -243,15 +243,15 @@ pub trait RaylibShader: AsRef<ffi::Shader> + AsMut<ffi::Shader> {
 
     /// Gets shader uniform location by name.
     #[inline]
-    fn get_shader_location(&self, uniform_name: &str) -> i32 {
-        let c_uniform_name = CString::new(uniform_name).unwrap();
+    fn get_shader_location(&self, uniform_name: impl IntoCStr) -> i32 {
+        let c_uniform_name = uniform_name.into_cstr().unwrap();
         unsafe { ffi::GetShaderLocation(*self.as_ref(), c_uniform_name.as_ptr()) }
     }
 
     /// Gets shader attribute location by name.
     #[inline]
-    fn get_shader_location_attribute(&self, attribute_name: &str) -> i32 {
-        let c_attribute_name = CString::new(attribute_name).unwrap();
+    fn get_shader_location_attribute(&self, attribute_name: impl IntoCStr) -> i32 {
+        let c_attribute_name = attribute_name.into_cstr().unwrap();
         unsafe { ffi::GetShaderLocationAttrib(*self.as_ref(), c_attribute_name.as_ptr()) }
     }
 

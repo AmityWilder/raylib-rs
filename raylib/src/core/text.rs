@@ -11,7 +11,7 @@ use crate::error::LoadFontError;
 use crate::util::IntoCStr;
 
 use std::convert::{AsMut, AsRef, TryInto};
-use std::ffi::{CString, OsString};
+use std::ffi::CString;
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 
@@ -108,21 +108,21 @@ impl Drop for Codepoints {
 
 impl RaylibHandle {
     /// Load all codepoints from a UTF-8 text string, codepoints count returned by parameter
-    pub(crate) fn load_codepoints(&mut self, text: &str) -> Codepoints {
-        let ptr = CString::new(text).unwrap();
+    pub(crate) fn load_codepoints(&mut self, text: impl IntoCStr) -> Codepoints {
+        let c_text = text.into_cstr().unwrap();
         let mut len = 0;
-        let u = unsafe { ffi::LoadCodepoints(ptr.as_ptr(), &mut len) };
+        let u = unsafe { ffi::LoadCodepoints(c_text.as_ptr(), &mut len) };
 
         unsafe {
             Codepoints(std::mem::ManuallyDrop::new(Box::from_raw(
-                std::slice::from_raw_parts_mut(u, text.len()),
+                std::slice::from_raw_parts_mut(u, c_text.count_bytes()),
             )))
         }
     }
 
     /// Get total number of codepoints in a UTF-8 encoded string
-    pub fn get_codepoint_count(text: &str) -> i32 {
-        let ptr = CString::new(text).unwrap();
+    pub fn get_codepoint_count(text: impl IntoCStr) -> i32 {
+        let ptr = text.into_cstr().unwrap();
         unsafe { ffi::GetCodepointCount(ptr.as_ptr()) }
     }
 
@@ -134,11 +134,11 @@ impl RaylibHandle {
 
     /// Loads font from file into GPU memory (VRAM).
     #[inline]
-    pub fn load_font(&mut self, _: &RaylibThread, filename: &str) -> Result<Font, LoadFontError> {
-        let c_filename = CString::new(filename).unwrap();
+    pub fn load_font(&mut self, _: &RaylibThread, filename: impl IntoCStr) -> Result<Font, LoadFontError> {
+        let c_filename = filename.into_cstr().unwrap();
         let f = unsafe { ffi::LoadFont(c_filename.as_ptr()) };
         if f.glyphs.is_null() || f.texture.id == 0 {
-            return Err(LoadFontError::LoadFromFileFailed { path: filename.into() });
+            return Err(LoadFontError::LoadFromFileFailed { path: c_filename.to_string_lossy().into_owned() });
         }
         Ok(Font(f))
     }
@@ -149,27 +149,29 @@ impl RaylibHandle {
     pub fn load_font_ex(
         &mut self,
         _: &RaylibThread,
-        filename: &str,
+        filename: impl IntoCStr,
         font_size: i32,
-        chars: Option<&str>,
+        chars: Option<impl IntoCStr>,
     ) -> Result<Font, LoadFontError> {
-        let c_filename = CString::new(filename).unwrap();
+        let c_filename = filename.into_cstr().unwrap();
         let f = unsafe {
             match chars {
                 Some(c) => {
+                    let c = c.into_cstr().unwrap();
+                    let codepoint_count = c.count_bytes();
                     let mut co = self.load_codepoints(c);
                     ffi::LoadFontEx(
                         c_filename.as_ptr(),
                         font_size,
                         co.0.as_mut_ptr(),
-                        c.len() as i32,
+                        codepoint_count as i32,
                     )
                 }
                 None => ffi::LoadFontEx(c_filename.as_ptr(), font_size, std::ptr::null_mut(), 0),
             }
         };
         if f.glyphs.is_null() || f.texture.id == 0 {
-            return Err(LoadFontError::LoadFromFileFailed { path: filename.into() });
+            return Err(LoadFontError::LoadFromFileFailed { path: c_filename.to_string_lossy().into_owned() });
         }
         Ok(Font(f))
     }
@@ -196,15 +198,16 @@ impl RaylibHandle {
     pub fn load_font_from_memory(
         &mut self,
         _: &RaylibThread,
-        file_type: &str,
+        file_type: impl IntoCStr,
         file_data: &[u8],
         font_size: i32,
-        chars: Option<&str>,
+        chars: Option<impl IntoCStr>,
     ) -> Result<Font, LoadFontError> {
-        let c_file_type = CString::new(file_type).unwrap();
+        let c_file_type = file_type.into_cstr().unwrap();
         let f = unsafe {
             match chars {
                 Some(c) => {
+                    let c = c.into_cstr().unwrap();
                     let mut co = self.load_codepoints(c);
                     ffi::LoadFontFromMemory(
                         c_file_type.as_ptr(),
@@ -318,7 +321,7 @@ pub trait RaylibFont: AsRef<ffi::Font> + AsMut<ffi::Font> {
     /// Export font as code file, returns true on success
     fn export_font_as_code(&self, filename: impl IntoCStr) -> bool {
         let c_str = filename.into_cstr().unwrap();
-        unsafe { ffi::ExportFontAsCode(*self.as_ref(), c_str.as_ref().as_ptr()) }
+        unsafe { ffi::ExportFontAsCode(*self.as_ref(), c_str.as_ptr()) }
     }
 
     /// Get glyph font info data for a codepoint (unicode character), fallback to '?' if not found
@@ -342,7 +345,7 @@ pub trait RaylibFont: AsRef<ffi::Font> + AsMut<ffi::Font> {
     /// Measures string width in pixels for `font`.
     fn measure_text(&self, text: impl IntoCStr, font_size: f32, spacing: f32) -> Vector2 {
         let c_text = text.into_cstr().unwrap();
-        unsafe { ffi::MeasureTextEx(*self.as_ref(), c_text.as_ref().as_ptr(), font_size, spacing).into() }
+        unsafe { ffi::MeasureTextEx(*self.as_ref(), c_text.as_ptr(), font_size, spacing).into() }
     }
 }
 
@@ -445,8 +448,8 @@ impl RaylibHandle {
     }
     /// Measures string width in pixels for default font.
     #[inline]
-    pub fn measure_text(&self, text: &str, font_size: i32) -> i32 {
-        let c_text = CString::new(text).unwrap();
+    pub fn measure_text(&self, text: impl IntoCStr, font_size: i32) -> i32 {
+        let c_text = text.into_cstr().unwrap();
         unsafe { ffi::MeasureText(c_text.as_ptr(), font_size) }
     }
 

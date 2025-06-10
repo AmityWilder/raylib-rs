@@ -3,8 +3,8 @@
 use crate::core::math::{BoundingBox, Vector3};
 use crate::core::texture::Image;
 use crate::core::{RaylibHandle, RaylibThread};
+use crate::util::IntoCStr;
 use crate::{consts, ffi, error::{LoadMaterialError, LoadModelAnimError, LoadModelError, SetMaterialError}};
-use std::ffi::CString;
 use std::os::raw::c_void;
 
 fn no_drop<T>(_thing: T) {}
@@ -80,12 +80,12 @@ impl Clone for WeakModelAnimation {
 impl RaylibHandle {
     /// Loads model from files (mesh and material).
     // #[inline]
-    pub fn load_model(&mut self, _: &RaylibThread, filename: &str) -> Result<Model, LoadModelError> {
-        let c_filename = CString::new(filename).unwrap();
+    pub fn load_model(&mut self, _: &RaylibThread, filename: impl IntoCStr) -> Result<Model, LoadModelError> {
+        let c_filename = filename.into_cstr().unwrap();
         let m = unsafe { ffi::LoadModel(c_filename.as_ptr()) };
         if m.meshes.is_null() && m.materials.is_null() && m.bones.is_null() && m.bindPose.is_null()
         {
-            return Err(LoadModelError::LoadFromFileFailed { path: filename.into() });
+            return Err(LoadModelError::LoadFromFileFailed { path: c_filename.to_string_lossy().into_owned() });
         }
         // TODO check if null pointer checks are necessary.
         Ok(Model(m))
@@ -110,13 +110,13 @@ impl RaylibHandle {
     pub fn load_model_animations(
         &mut self,
         _: &RaylibThread,
-        filename: &str,
+        filename: impl IntoCStr,
     ) -> Result<Vec<ModelAnimation>, LoadModelAnimError> {
-        let c_filename = CString::new(filename).unwrap();
+        let c_filename = filename.into_cstr().unwrap();
         let mut m_size = 0;
         let m_ptr = unsafe { ffi::LoadModelAnimations(c_filename.as_ptr(), &mut m_size) };
         if m_size <= 0 {
-            return Err(LoadModelAnimError::NoAnimationsLoaded { path: filename.into() });
+            return Err(LoadModelAnimError::NoAnimationsLoaded { path: c_filename.to_string_lossy().into_owned() });
         }
         let mut m_vec = Vec::with_capacity(m_size as usize);
         for i in 0..m_size {
@@ -514,8 +514,8 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
 
     /// Exports mesh as an OBJ file.
     #[inline]
-    fn export(&self, filename: &str) {
-        let c_filename = CString::new(filename).unwrap();
+    fn export(&self, filename: impl IntoCStr) {
+        let c_filename = filename.into_cstr().unwrap();
         unsafe {
             ffi::ExportMesh(*self.as_ref(), c_filename.as_ptr());
         }
@@ -523,8 +523,8 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
 
     /// Export mesh as code file (.h) defining multiple arrays of vertex attributes
     #[inline]
-    fn export_as_code(&self, filename: &str) {
-        let c_filename = CString::new(filename).unwrap();
+    fn export_as_code(&self, filename: impl IntoCStr) {
+        let c_filename = filename.into_cstr().unwrap();
         unsafe {
             ffi::ExportMeshAsCode(*self.as_ref(), c_filename.as_ptr());
         }
@@ -539,12 +539,12 @@ impl Material {
     }
 
     /// Load materials from model file
-    pub fn load_materials(filename: &str) -> Result<Vec<Material>, LoadMaterialError> {
-        let c_filename = CString::new(filename).unwrap();
+    pub fn load_materials(filename: impl IntoCStr) -> Result<Vec<Material>, LoadMaterialError> {
+        let c_filename = filename.into_cstr().unwrap();
         let mut m_size = 0;
         let m_ptr = unsafe { ffi::LoadMaterials(c_filename.as_ptr(), &mut m_size) };
         if m_size <= 0 {
-            return Err(LoadMaterialError::NoneLoaded { path: filename.into() });
+            return Err(LoadMaterialError::NoneLoaded { path: c_filename.to_string_lossy().into_owned() });
         }
         let mut m_vec = Vec::with_capacity(m_size as usize);
         for i in 0..m_size {

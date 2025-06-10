@@ -4,6 +4,7 @@ use crate::core::color::Color;
 use crate::core::math::Rectangle;
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
+use crate::util::IntoCStr;
 use std::convert::TryInto;
 use std::ffi::CString;
 use std::mem::ManuallyDrop;
@@ -245,8 +246,8 @@ impl Image {
     }
     /// Exports image as a PNG file.
     #[inline]
-    pub fn export_image(&self, filename: &str) {
-        let c_filename = CString::new(filename).unwrap();
+    pub fn export_image(&self, filename: impl IntoCStr) {
+        let c_filename = filename.into_cstr().unwrap();
         unsafe {
             ffi::ExportImage(self.0, c_filename.as_ptr());
         }
@@ -254,8 +255,8 @@ impl Image {
 
     /// Exports image as a PNG file.
     #[inline]
-    pub fn export_image_as_code(&self, filename: &str) {
-        let c_filename = CString::new(filename).unwrap();
+    pub fn export_image_as_code(&self, filename: impl IntoCStr) {
+        let c_filename = filename.into_cstr().unwrap();
         unsafe {
             ffi::ExportImageAsCode(self.0, c_filename.as_ptr());
         }
@@ -668,13 +669,13 @@ impl Image {
     #[inline]
     pub fn draw_text(
         &mut self,
-        text: &str,
+        text: impl IntoCStr,
         pos_x: i32,
         pos_y: i32,
         font_size: i32,
         color: impl Into<ffi::Color>,
     ) {
-        let c_text = CString::new(text).unwrap();
+        let c_text = text.into_cstr().unwrap();
         unsafe {
             ffi::ImageDrawText(
                 &mut self.0,
@@ -692,13 +693,13 @@ impl Image {
     pub fn draw_text_ex(
         &mut self,
         font: impl AsRef<ffi::Font>,
-        text: &str,
+        text: impl IntoCStr,
         position: impl Into<ffi::Vector2>,
         font_size: f32,
         spacing: f32,
         color: impl Into<ffi::Color>,
     ) {
-        let c_text = CString::new(text).unwrap();
+        let c_text = text.into_cstr().unwrap();
         unsafe {
             ffi::ImageDrawTextEx(
                 &mut self.0,
@@ -793,7 +794,7 @@ impl Image {
     }
 
     /// Export image to memory buffer.
-    pub fn export_image_to_memory(&self, file_type: &str) -> Result<&[u8], InvalidImageError> {
+    pub fn export_image_to_memory(&self, file_type: impl IntoCStr) -> Result<&[u8], InvalidImageError> {
         if self.width == 0 {
             return Err(InvalidImageError::ZeroWidth);
         }
@@ -804,7 +805,7 @@ impl Image {
             return Err(InvalidImageError::NullData);
         }
 
-        let c_filetype = CString::new(file_type).unwrap();
+        let c_filetype = file_type.into_cstr().unwrap();
         let data_size: &mut i32 = &mut 0;
         let data = unsafe { ffi::ExportImageToMemory(self.0, c_filetype.as_ptr(), data_size) };
 
@@ -939,8 +940,8 @@ impl Image {
     }
 
     // Generates an image with text
-    pub fn gen_image_text(width: i32, height: i32, text: &str) -> Image {
-        let c_str = CString::new(text).unwrap();
+    pub fn gen_image_text(width: i32, height: i32, text: impl IntoCStr) -> Image {
+        let c_str = text.into_cstr().unwrap();
         unsafe { Image(ffi::GenImageText(width, height, c_str.as_ptr())) }
     }
 
@@ -969,8 +970,8 @@ impl Image {
     }
 
     /// Loads image from file into CPU memory (RAM).
-    pub fn load_image(filename: &str) -> Result<Image, InvalidImageError> {
-        let c_filename = CString::new(filename).unwrap();
+    pub fn load_image(filename: impl IntoCStr) -> Result<Image, InvalidImageError> {
+        let c_filename = filename.into_cstr().unwrap();
         let i = unsafe { ffi::LoadImage(c_filename.as_ptr()) };
         if i.data.is_null() {
             return Err(InvalidImageError::NullDataFromFile);
@@ -981,8 +982,8 @@ impl Image {
     /// Loads image from a given memory buffer
     /// The input data is expected to be in a supported file format such as png. Which formats are
     /// supported depend on the build flags used for the raylib (C) library.
-    pub fn load_image_from_mem(filetype: &str, bytes: &[u8]) -> Result<Image, InvalidImageError> {
-        let c_filetype = CString::new(filetype).unwrap();
+    pub fn load_image_from_mem(filetype: impl IntoCStr, bytes: &[u8]) -> Result<Image, InvalidImageError> {
+        let c_filetype = filetype.into_cstr().unwrap();
         let data_size = bytes.len().try_into().unwrap();
         if data_size == 0 {
             return Err(InvalidImageError::InvalidFile)
@@ -1004,16 +1005,16 @@ impl Image {
     /// Image.data buffer includes all frames.
     /// All frames returned are in RGBA format.
     /// Frames delay data is discarded
-    pub fn load_image_anim(filename: &str, frame_num: &mut i32) -> Self {
-        let c_filename = CString::new(filename).unwrap();
+    pub fn load_image_anim(filename: impl IntoCStr, frame_num: &mut i32) -> Self {
+        let c_filename = filename.into_cstr().unwrap();
 
         unsafe { Image(ffi::LoadImageAnim(c_filename.as_ptr(), frame_num)) }
     }
 
     /// Load image from memory buffer, with the number of frames loaded saved to frame_num.
     /// fileType refers to extension: i.e. ".png". File extension must be provided in lower-case
-    pub fn load_image_anim_from_memory(filetype: &str, data: &[u8], frame_num: &mut i32) -> Self {
-        let c_filetype = CString::new(filetype).unwrap();
+    pub fn load_image_anim_from_memory(filetype: impl IntoCStr, data: &[u8], frame_num: &mut i32) -> Self {
+        let c_filetype = filetype.into_cstr().unwrap();
 
         unsafe {
             Image(ffi::LoadImageAnimFromMemory(
@@ -1027,13 +1028,13 @@ impl Image {
 
     /// Loads image from RAW file data.
     pub fn load_image_raw(
-        filename: &str,
+        filename: impl IntoCStr,
         width: i32,
         height: i32,
         format: i32,
         header_size: i32,
     ) -> Result<Image, InvalidImageError> {
-        let c_filename = CString::new(filename).unwrap();
+        let c_filename = filename.into_cstr().unwrap();
         let i =
             unsafe { ffi::LoadImageRaw(c_filename.as_ptr(), width, height, format, header_size) };
         if i.data.is_null() {
@@ -1044,8 +1045,8 @@ impl Image {
 
     /// Creates an image from `text` (custom font).
     #[inline]
-    pub fn image_text(text: &str, font_size: i32, color: impl Into<ffi::Color>) -> Image {
-        let c_text = CString::new(text).unwrap();
+    pub fn image_text(text: impl IntoCStr, font_size: i32, color: impl Into<ffi::Color>) -> Image {
+        let c_text = text.into_cstr().unwrap();
         unsafe { Image(ffi::ImageText(c_text.as_ptr(), font_size, color.into())) }
     }
 
@@ -1053,12 +1054,12 @@ impl Image {
     #[inline]
     pub fn image_text_ex(
         font: impl std::convert::AsRef<ffi::Font>,
-        text: &str,
+        text: impl IntoCStr,
         font_size: f32,
         spacing: f32,
         tint: impl Into<ffi::Color>,
     ) -> Image {
-        let c_text = CString::new(text).unwrap();
+        let c_text = text.into_cstr().unwrap();
         unsafe {
             Image(ffi::ImageTextEx(
                 *font.as_ref(),
@@ -1224,11 +1225,11 @@ pub fn get_pixel_data_size(width: i32, height: i32, format: ffi::PixelFormat) ->
 
 impl RaylibHandle {
     /// Loads texture from file into GPU memory (VRAM).
-    pub fn load_texture(&mut self, _: &RaylibThread, filename: &str) -> Result<Texture2D, LoadTextureError> {
-        let c_filename = CString::new(filename).unwrap();
+    pub fn load_texture(&mut self, _: &RaylibThread, filename: impl IntoCStr) -> Result<Texture2D, LoadTextureError> {
+        let c_filename = filename.into_cstr().unwrap();
         let t = unsafe { ffi::LoadTexture(c_filename.as_ptr()) };
         if t.id == 0 {
-            return Err(LoadTextureError::TextureFromFileFailed { path: filename.into() });
+            return Err(LoadTextureError::TextureFromFileFailed { path: c_filename.to_string_lossy().into_owned() });
         }
         Ok(Texture2D(t))
     }

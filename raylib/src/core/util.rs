@@ -37,58 +37,107 @@ impl std::error::Error for IntoCStrNulError {}
 /// This trait provides specializations for multiple common string types to
 /// minimize unnecessary allocations.
 ///
-/// # Example
-///
-/// ```no_run
-/// # use crate::core::util::ToCStr;
-/// unsafe extern "C" {
-///     fn ffi_fn(text: *const std::ffi::c_char);
-/// }
-///
-/// fn call_ffi_fn(string: impl ToCStr) {
-///     let c_string = string.to_cstr();
-///     unsafe {
-///         ffi_fn(c_string.as_ref().as_ptr());
-///     }
-/// }
-/// ```
+/// [`IntoCStr`] always produces a type that implements [`IntoCStr`], **often as
+/// a no-op**. So it is safe and performant to call `into_cstr()` and pass the
+/// (non-erroneous) return to another [`IntoCStr`] argument.
 ///
 /// **Note to users of raylib-rs:**
 ///
-/// If the string you are passing to a [`ToCStr`] argument is already a literal,
+/// If the string you are passing to a [`IntoCStr`] argument is already a literal,
 /// consider making it a [`CStr`] literal by placing a `c` before the open quote.
 ///
-/// (e.g. `"Hello World!"` -> `c"Hello World!"`)
+/// e.g.
+/// ```no_run
+/// d.draw_text( "Hello World!", ...) // before
+/// d.draw_text(c"Hello World!", ...) // after
+/// ```
 ///
 /// This small change will eliminate a runtime allocation that would have been
 /// used just to store the already-compiletime-constant text.
+///
+/// Additionally, if you are passing a [`format!`]'d string by reference and don't
+/// need to use it anywhere else, consider passing the owned string directly so
+/// that the original allocation can possibly be used instead of allocating a second
+/// one to append nul into.
+///
+/// e.g.
+/// ```no_run
+/// d.draw_text(&format!("I have {} bananas", n), ...) // before
+/// d.draw_text( format!("I have {} bananas", n), ...) // after
+/// ```
 pub trait IntoCStr: Sized {
-    type Output: AsRef<CStr>;
+    /// The [`CStr`]-like type produced by `into_cstr()` if there are no errors.
+    type Output: IntoCStrNoOp;
 
     /// Convert string to a type that can be referenced as a nul-terminated [`CStr`].
     ///
-    /// Returns [`None`] if an interior byte is 0. See [`std::ffi::NulError`] for more info.
+    /// Returns [`IntoCStrNulError`] if an interior byte is 0.
     ///
     /// **Warning for callers**
     ///
-    /// Some Implementations of `to_cstr` return an owned [`CString`] instead of a borrowed
-    /// [`CStr`]. It is the caller's responsibility to ensure that the return outlives the
-    /// function it is being passed to. Calling `as_ptr` on an owned [`CString`] that hasn't
-    /// been stored to a variable will drop the owned allocation immediately after `as_ptr`
-    /// returns, resulting in a dangling pointer.
+    /// Some Implementations return an owned [`CString`] instead of a borrowed [`CStr`]. It
+    /// is the caller's responsibility to ensure that the return outlives the function it
+    /// is being passed to. Calling `as_ptr` on an owned [`CString`] that hasn't been stored
+    /// to a variable will drop the owned allocation immediately after `as_ptr` returns,
+    /// resulting in a dangling pointer.
     ///
     /// See the documentation of [`CStr::as_ptr`] for more info.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use crate::core::util::ToCStr;
+    /// # use std::ffi::c_char;
+    ///
+    /// unsafe fn cstr_fn(c_str: *const c_char) {
+    ///     // ...
+    /// }
+    ///
+    /// fn wrapper_fn(text: impl ToCStr) {
+    ///     // into_cstr must be called outside of cstr_fn's mouth
+    ///     let c_text = text.into_cstr();
+    ///     unsafe {
+    ///         cstr_fn(c_text.as_ptr())
+    ///     }
+    /// }
+    /// ```
     #[must_use]
     fn into_cstr(self) -> Result<Self::Output, IntoCStrNulError>;
 }
 
+/// Marker trait for types that can be converted to a [`CStr`]-compatible type both
+/// trivially and infallibly.
+///
+/// Types that implement this trait are guaranteed to return `self` when `into_cstr`
+/// is called, and can therefore be converted to `const char*` without conversion.
+pub trait IntoCStrNoOp: std::ops::Deref<Target = CStr> {
+    #[inline]
+    fn as_ptr(&self) -> *const std::ffi::c_char {
+        CStr::as_ptr(self)
+    }
+}
+
 /// No-op. Returns `self` unconditionally.
-impl<'a> IntoCStr for &'a CStr {
+impl<T: IntoCStrNoOp> IntoCStr for T {
+    type Output = Self;
+
+    #[inline]
+    fn into_cstr(self) -> Result<T, IntoCStrNulError> {
+        Ok(self)
+    }
+}
+
+impl IntoCStrNoOp for &CStr {}
+impl IntoCStrNoOp for CString {}
+impl IntoCStrNoOp for Cow<'_, CStr> {}
+
+/// Returns `self` as a `&CStr` unconditionally.
+impl<'a> IntoCStr for &'a CString {
     type Output = &'a CStr;
 
     #[inline]
     fn into_cstr(self) -> Result<&'a CStr, IntoCStrNulError> {
-        Ok(self)
+        Ok(self.as_c_str())
     }
 }
 
@@ -99,12 +148,13 @@ impl<'a> IntoCStr for &'a [u8] {
 
     #[inline]
     fn into_cstr(self) -> Result<Cow<'a, CStr>, IntoCStrNulError> {
+        use FromBytesWithNulError::*;
         match CStr::from_bytes_with_nul(self) {
             Ok(s) => Ok(Cow::Borrowed(s)),
-            Err(FromBytesWithNulError::InteriorNul { position }) => Err(IntoCStrNulError { position }),
-            Err(FromBytesWithNulError::NotNulTerminated) => match CString::new(self) {
+            Err(InteriorNul { position }) => Err(IntoCStrNulError { position }),
+            Err(NotNulTerminated) => match CString::new(self) {
                 Ok(s) => Ok(Cow::Owned(s)),
-                Err(e) => Err(IntoCStrNulError { position: e.nul_position() }),
+                Err(e) => Err(e.into()),
             },
         }
     }
