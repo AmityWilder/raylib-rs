@@ -80,25 +80,75 @@ impl TryIntoUsize for isize {
         self.try_into().ok()
     }
 }
+impl<T: TryIntoUsize, F: FnOnce() -> T> TryIntoUsize for F {
+    #[inline]
+    fn try_into_usize(self) -> Option<usize> {
+        self().try_into_usize()
+    }
+}
+impl<T: TryIntoUsize> TryIntoUsize for Option<T> {
+    #[inline]
+    fn try_into_usize(self) -> Option<usize> {
+        self.and_then(|x| x.try_into_usize())
+    }
+}
+impl<T: TryIntoUsize, E> TryIntoUsize for Result<T, E> {
+    #[inline]
+    fn try_into_usize(self) -> Option<usize> {
+        self.ok().try_into_usize()
+    }
+}
 
 /// Provide 'unload' implementation for a loaded resource.
-pub trait Unloader {
-    /// The type of the resource to be unloaded.
-    type Type: ?Sized;
-
+pub trait Unloader<T: ?Sized> {
     /// Unload the resource.
     ///
     /// # Safety
     /// - `data` must have been loaded with the correct allocator for this unloader.
-    unsafe fn unload(&mut self, data: NonNull<Self::Type>);
+    unsafe fn unload(&mut self, data: NonNull<T>);
 }
 
 /// Raylib default memory management. Frees with [`ffi::MemFree`] (`RL_FREE`).
-pub struct MemManaged<T: ?Sized>(PhantomData<T>);
+pub struct MemManaged;
 
-impl<T: ?Sized> Unloader for MemManaged<T> {
-    type Type = T;
+impl MemManaged {
+    #[inline]
+    pub(crate) fn alloc<T>(&mut self) -> Result<NonNull<MaybeUninit<T>>, AllocationError> {
+        let size = std::mem::size_of::<T>()
+            .try_into().ok()
+            .ok_or(AllocationError::BadSize)?;
+        // SAFETY: MemAlloc has no preconditions.
+        NonNull::new(unsafe { ffi::MemAlloc(size) }.cast::<MaybeUninit<T>>())
+            .ok_or(AllocationError::OutOfMemory)
+    }
 
+    #[inline]
+    pub(crate) fn alloc_slice<T>(&mut self, len: usize) -> Result<NonNull<[MaybeUninit<T>]>, AllocationError> {
+        let size = std::mem::size_of::<T>().checked_mul(len)
+            .and_then(|n| n.try_into().ok())
+            .ok_or(AllocationError::BadSize)?;
+        // SAFETY: MemAlloc has no preconditions.
+        NonNull::new(unsafe { ffi::MemAlloc(size) }.cast::<MaybeUninit<T>>())
+            .map(|data| NonNull::slice_from_raw_parts(data, len))
+            .ok_or(AllocationError::OutOfMemory)
+    }
+
+    #[inline]
+    pub(crate) fn alloc_init_with<T>(&mut self, init: impl FnOnce() -> T) -> Result<NonNull<T>, AllocationError> {
+        self.alloc::<T>()
+            .map(|mut ptr| {
+                unsafe { ptr.as_mut() }.write(init());
+                ptr.cast::<T>()
+            })
+    }
+
+    #[inline]
+    pub(crate) fn alloc_init<T>(&mut self, init: T) -> Result<NonNull<T>, AllocationError> {
+        self.alloc_init_with(move || init)
+    }
+}
+
+impl<T: ?Sized> Unloader<T> for MemManaged {
     /// # Safety
     /// - `data` must have been allocated with [`ffi::MemAlloc`] or `RL_MALLOC`.
     #[inline]
@@ -123,14 +173,13 @@ impl<T: ?Sized> Unloader for MemManaged<T> {
 /// let expected: &[u8] = &[1, 5, 0, 250, 255, 49, 49, 49, 49, 49];
 /// assert_eq!(data, expected);
 /// ```
-#[derive(Debug)]
-pub struct DataBuf<T: ?Sized, A: Unloader<Type = T> = MemManaged<T>> {
+pub struct DataBuf<T: ?Sized, A: Unloader<T> = MemManaged> {
     buf: NonNull<T>,
     _marker: PhantomData<T>,
     manager: A,
 }
 
-impl<T: ?Sized, A: Unloader<Type = T>> Drop for DataBuf<T, A> {
+impl<T: ?Sized, A: Unloader<T>> Drop for DataBuf<T, A> {
     #[inline]
     fn drop(&mut self) {
         // SAFETY: unloader given upon construction
@@ -140,7 +189,26 @@ impl<T: ?Sized, A: Unloader<Type = T>> Drop for DataBuf<T, A> {
     }
 }
 
-impl<T: ?Sized, A: Unloader<Type = T>> Deref for DataBuf<T, A> {
+impl<T: ?Sized + std::fmt::Debug, A: Unloader<T>> std::fmt::Debug for DataBuf<T, A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (&**self).fmt(f)
+    }
+}
+
+impl<T: ?Sized + Clone> Clone for DataBuf<T, MemManaged> {
+    fn clone(&self) -> Self {
+        Self::new(unsafe { self.buf.as_ref() }.clone()).unwrap()
+    }
+}
+
+impl<T: ?Sized + Eq, A: Unloader<T>> PartialEq for DataBuf<T, A> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref().eq(other.as_ref())
+    }
+}
+
+impl<T: ?Sized, A: Unloader<T>> Deref for DataBuf<T, A> {
     type Target = T;
 
     #[inline]
@@ -149,43 +217,41 @@ impl<T: ?Sized, A: Unloader<Type = T>> Deref for DataBuf<T, A> {
     }
 }
 
-impl<T: ?Sized, A: Unloader<Type = T>> DerefMut for DataBuf<T, A> {
+impl<T: ?Sized, A: Unloader<T>> DerefMut for DataBuf<T, A> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.buf.as_mut() }
     }
 }
 
-impl<T: ?Sized, A: Unloader<Type = T>> AsRef<T> for DataBuf<T, A> {
+impl<T: ?Sized, A: Unloader<T>> AsRef<T> for DataBuf<T, A> {
     #[inline]
     fn as_ref(&self) -> &T {
         self.deref()
     }
 }
 
-impl<T: ?Sized, A: Unloader<Type = T>> AsMut<T> for DataBuf<T, A> {
+impl<T: ?Sized, A: Unloader<T>> AsMut<T> for DataBuf<T, A> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
         self.deref_mut()
     }
 }
 
-impl<T> DataBuf<[T], MemManaged<[T]>> {
+impl<T> DataBuf<[MaybeUninit<T>], MemManaged> {
     /// Allocate a Raylib-owned buffer with `count` elements.
     pub fn new(count: usize) -> Result<Self, AllocationError> {
-        let byte_count = std::mem::size_of::<T>().checked_mul(count)
-            .and_then(|n| n.try_into().ok())
-            .ok_or(AllocationError::BadSize)?;
-
-        // SAFETY:
-        // - MemAlloc has no preconditions
-        let data = unsafe { ffi::MemAlloc(byte_count) }.cast::<T>();
-        // SAFETY:
-        // - just allocated `count` elements of `data` with `MemAlloc`
-        unsafe { Self::slice_from_raw(data, count) }
-            .ok_or(AllocationError::OutOfMemory)
+        let mut manager = MemManaged;
+        manager.alloc_slice(count)
+            .map(|buf| Self {
+                buf,
+                _marker: PhantomData,
+                manager,
+            })
     }
+}
 
+impl<T> DataBuf<[T], MemManaged> {
     /// Mark a Raylib-given pointer as an owned slice with len `count`.
     ///
     /// Returns [`None`] if `data` is null.
@@ -197,26 +263,24 @@ impl<T> DataBuf<[T], MemManaged<[T]>> {
     /// - non-null `data` must be allocated with [`ffi::MemAlloc`] or `RL_MALLOC`
     #[inline]
     pub(crate) unsafe fn slice_from_raw(data: *mut T, count: impl TryIntoUsize) -> Option<Self> {
-        unsafe { Self::slice_from_raw_in(data, count, MemManaged(PhantomData)) }
+        unsafe { Self::slice_from_raw_in(data, count, MemManaged) }
     }
 }
 
-impl<T> DataBuf<T, MemManaged<T>> {
+impl<T> DataBuf<T, MemManaged> {
     /// Allocate a Raylib-owned buffer.
-    pub fn new() -> Result<Self, AllocationError> {
-        let byte_count = std::mem::size_of::<T>()
-            .try_into().ok()
-            .ok_or(AllocationError::BadSize)?;
-
-        // SAFETY:
-        // - MemAlloc has no preconditions
-        let data = unsafe { ffi::MemAlloc(byte_count) }.cast::<T>();
-        // SAFETY:
-        // - just allocated `data` with `MemAlloc`
-        unsafe { Self::from_raw(data) }
-            .ok_or(AllocationError::OutOfMemory)
+    pub fn new(value: T) -> Result<Self, AllocationError> {
+        let mut manager = MemManaged;
+        manager.alloc_init(|| value)
+            .map(|buf| Self {
+                buf,
+                _marker: PhantomData,
+                manager,
+            })
     }
+}
 
+impl<T> DataBuf<T, MemManaged> {
     /// Mark a Raylib-given pointer as an owned buffer.
     ///
     /// Returns [`None`] if `data` is null.
@@ -226,11 +290,11 @@ impl<T> DataBuf<T, MemManaged<T>> {
     /// - non-null `data` must be allocated with [`ffi::MemAlloc`] or `RL_MALLOC`
     #[inline]
     pub(crate) unsafe fn from_raw(data: *mut T) -> Option<Self> {
-        unsafe { Self::from_raw_in(data, MemManaged(PhantomData)) }
+        unsafe { Self::from_raw_in(data, MemManaged) }
     }
 }
 
-impl<T, A: Unloader<Type = [T]>> DataBuf<[T], A> {
+impl<T, A: Unloader<[T]>> DataBuf<[T], A> {
     /// Mark a Raylib-given pointer as an owned slice with len `count`.
     ///
     /// Returns [`None`] if `data` is null.
@@ -251,7 +315,7 @@ impl<T, A: Unloader<Type = [T]>> DataBuf<[T], A> {
     }
 }
 
-impl<T: ?Sized, A: Unloader<Type = T>> DataBuf<T, A> {
+impl<T: ?Sized, A: Unloader<T>> DataBuf<T, A> {
     /// Mark a Raylib-given pointer as an owned buffer.
     ///
     /// Returns [`None`] if `data` is null.
@@ -290,7 +354,7 @@ pub fn compress_data(data: &[u8]) -> Result<DataBuf<[u8]>, CompressionError> {
     // SAFETY:
     // - `buffer` is allocated with `RL_MALLOC`
     // - `out_length` accurately describes `buffer`'s len when `buffer` is non-null
-    unsafe { DataBuf::slice_from_raw(buffer, out_length.assume_init()) }
+    unsafe { DataBuf::slice_from_raw(buffer, || out_length.assume_init()) }
         .ok_or_else(|| CompressionError::CompressionFailed)
 }
 
@@ -318,7 +382,7 @@ pub fn decompress_data(data: &[u8]) -> Result<DataBuf<[u8]>, CompressionError> {
     // SAFETY:
     // - `buffer` is allocated with `RL_MALLOC`
     // - `out_length` accurately describes `buffer`'s len when `buffer` is non-null
-    unsafe { DataBuf::slice_from_raw(buffer, out_length.assume_init()) }
+    unsafe { DataBuf::slice_from_raw(buffer, || out_length.assume_init()) }
         .ok_or_else(|| CompressionError::CompressionFailed)
 }
 
