@@ -712,6 +712,8 @@ impl Mesh {
         res_x: i32,
         res_z: i32,
     ) -> Option<Mesh> {
+        assert!(res_x >= 0);
+        assert!(res_z >= 0);
         // SAFETY:
         // - `RaylibThread` proves we are on the correct thread
         // - We are creating a new mesh, so it isn't pointing to an existing resource
@@ -732,6 +734,8 @@ impl Mesh {
     #[inline]
     #[must_use]
     pub fn gen_mesh_sphere(_: &RaylibThread, radius: f32, rings: i32, slices: i32) -> Option<Mesh> {
+        assert!(rings >= 0);
+        assert!(slices >= 0);
         // SAFETY:
         // - `RaylibThread` proves we are on the correct thread
         // - We are creating a new mesh, so it isn't pointing to an existing resource
@@ -747,6 +751,8 @@ impl Mesh {
         rings: i32,
         slices: i32,
     ) -> Option<Mesh> {
+        assert!(rings >= 0);
+        assert!(slices >= 0);
         // SAFETY:
         // - `RaylibThread` proves we are on the correct thread
         // - We are creating a new mesh, so it isn't pointing to an existing resource
@@ -762,6 +768,7 @@ impl Mesh {
         height: f32,
         slices: i32,
     ) -> Option<Mesh> {
+        assert!(slices >= 0);
         // SAFETY:
         // - `RaylibThread` proves we are on the correct thread
         // - We are creating a new mesh, so it isn't pointing to an existing resource
@@ -778,6 +785,8 @@ impl Mesh {
         rad_seg: i32,
         sides: i32,
     ) -> Option<Mesh> {
+        assert!(rad_seg >= 0);
+        assert!(sides >= 0);
         // SAFETY:
         // - `RaylibThread` proves we are on the correct thread
         // - We are creating a new mesh, so it isn't pointing to an existing resource
@@ -794,6 +803,8 @@ impl Mesh {
         rad_seg: i32,
         sides: i32,
     ) -> Option<Mesh> {
+        assert!(rad_seg >= 0);
+        assert!(sides >= 0);
         // SAFETY:
         // - `RaylibThread` proves we are on the correct thread
         // - We are creating a new mesh, so it isn't pointing to an existing resource
@@ -822,6 +833,9 @@ impl Mesh {
         cubicmap: &Image,
         cube_size: impl Into<MintVec3>,
     ) -> Option<Mesh> {
+        // SAFETY:
+        // - `RaylibThread` proves we are on the correct thread
+        // - We are creating a new mesh, so it isn't pointing to an existing resource
         unsafe { Mesh::from_raw(ffi::GenMeshCubicmap(cubicmap.0, cube_size.into())) }
     }
 
@@ -829,6 +843,10 @@ impl Mesh {
     #[inline]
     #[must_use]
     pub fn gen_mesh_cone(_: &RaylibThread, radius: f32, height: f32, slices: i32) -> Option<Mesh> {
+        assert!(slices >= 0);
+        // SAFETY:
+        // - `RaylibThread` proves we are on the correct thread
+        // - We are creating a new mesh, so it isn't pointing to an existing resource
         unsafe { Mesh::from_raw(ffi::GenMeshCone(radius, height, slices)) }
     }
 
