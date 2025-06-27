@@ -66,26 +66,6 @@ pub mod rgui;
 /// The raw, unsafe FFI binding, in case you need that escape hatch or the safe layer doesn't provide something you need.
 pub mod ffi {
     pub use raylib_sys::*;
-
-    macro_rules! doc_safety {
-        (
-            $(
-                $(#[doc = $($doc:tt)+])*
-                $item:ident
-            ),* $(,)?
-        ) => {
-            $(
-                /// # Safety
-                $(#[doc = $($doc)+])*
-                pub use raylib_sys::$item;
-            )*
-        };
-    }
-
-    doc_safety!{
-        /// test
-        GenMeshPoly,
-    }
 }
 
 pub use crate::core::collision::*;
