@@ -14,6 +14,7 @@ autoexamples = false
 
 [dependencies]
 raylib-sys = { version = "5.7.0", path = "../raylib-sys", default-features = false }
+u31 = { version = "0.1.0", path = "../u31" }
 serde = { version = "1.0.125", features = ["derive"], optional = true }
 serde_json = { version = "1.0.64", optional = true }
 
@@ -33,6 +34,7 @@ rand = "0.9"
 default = ["raylib-sys/default"]
 nightly = []
 serde = ["dep:serde", "raylib-sys/serde", "glam/serde"]
+nightly-u31-niches = ["u31/nightly-niches"]
 
 raygui = ["raylib-sys/raygui"]
 # ----- Copy and paste these from `raylib-sys` for easier maintance

@@ -1,0 +1,12 @@
+[package]
+name = "u31"
+version = "0.1.0"
+authors = ["Amy Wilder <https://github.com/AmityWilder>"]
+license = "Zlib"
+description = "Helper for unsigned i32."
+edition = "2024"
+
+[features]
+default = []
+# Use rustc niche optimization (may cause compiler crashing)
+nightly-niches = []
