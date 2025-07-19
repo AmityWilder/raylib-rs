@@ -6,11 +6,18 @@
 //!   Define [`u31`] with niche optimization so that enums with one [`u31`] variant
 //!   (ex: [`Option<u31>`]) can be the same size as [`u31`].
 
-#![forbid(clippy::undocumented_unsafe_blocks, clippy::missing_safety_doc)]
+#![forbid(
+    clippy::undocumented_unsafe_blocks,
+    clippy::missing_safety_doc,
+    clippy::multiple_unsafe_ops_per_block,
+    clippy::allow_attributes_without_reason
+)]
 #![deny(
+    clippy::cast_abs_to_unsigned,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_precision_loss,
+    clippy::cast_ptr_alignment,
     clippy::cast_sign_loss,
     reason = r#"Conversions must be lossless. Document them with #[allow(clippy::cast_..., reason = "...")]."#
 )]
@@ -24,7 +31,7 @@ use std::num::TryFromIntError;
 /// Useful for [`i32`] field that should never be negative.
 ///
 /// Valid bounds are 0..=[`i32::MAX`].
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, reason = "Consistency with u32/i32 style")]
 #[repr(transparent)]
 #[cfg_attr(feature = "nightly-niches", rustc_layout_scalar_valid_range_start(0))]
 #[cfg_attr(
@@ -1094,13 +1101,14 @@ mod tests {
             2
         );
 
-        // SAFETY: that's what we're testing
         assert_eq!(
+            // SAFETY: that's what we're testing
             unsafe { std::mem::transmute::<i32, u31>(65743i32) },
             u31::try_from_i32(65743).unwrap(),
             "bad transmute"
         );
         assert_eq!(
+            // SAFETY: that's what we're testing
             unsafe { std::mem::transmute::<u31, i32>(u31::try_from_i32(65743).unwrap()) },
             65743i32,
             "bad transmute"

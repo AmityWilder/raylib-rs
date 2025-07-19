@@ -136,7 +136,8 @@ pub fn get_ray_collision_model(
     model: &Mesh,
     transform: &Matrix,
 ) -> RayCollision {
-    unsafe { ffi::GetRayCollisionMesh(ray.into(), model.make_raw(), transform.into()).into() }
+    todo!()
+    // unsafe { ffi::GetRayCollisionMesh(ray.into(), model.make_raw(), transform.into()).into() }
 }
 
 /// Gets collision info between ray and triangle.
