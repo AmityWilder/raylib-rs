@@ -10,10 +10,8 @@
     clippy::cmp_null,
     clippy::undocumented_unsafe_blocks,
     clippy::missing_safety_doc,
-    clippy::multiple_unsafe_ops_per_block,
     clippy::crosspointer_transmute,
     clippy::allow_attributes_without_reason,
-    clippy::missing_assert_message,
     clippy::missing_asserts_for_indexing,
     clippy::missing_const_for_fn,
     clippy::missing_transmute_annotations,
@@ -41,6 +39,7 @@
     reason = "3D is extremely delicate and requires extra caution."
 )]
 #![deny(
+    clippy::multiple_unsafe_ops_per_block,
     clippy::bytes_count_to_len,
     clippy::big_endian_bytes,
     clippy::little_endian_bytes,
@@ -71,6 +70,7 @@ use crate::core::{
     texture::Image,
     {RaylibHandle, RaylibThread},
 };
+use crate::databuf::DataBuf;
 use crate::{
     consts,
     error::{LoadMaterialError, LoadModelAnimError, LoadModelError, SetMaterialError},
@@ -79,6 +79,7 @@ use crate::{
 use std::ffi::CStr;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
+use std::ptr::null_mut;
 use std::{
     ffi::CString,
     num::NonZeroU32,
@@ -115,6 +116,7 @@ impl Copy for WeakMesh<'_> {}
 ///
 /// Guaranteed to be uploaded
 #[derive(Debug)]
+#[repr(C)]
 pub struct Mesh {
     /// Number of vertices stored in arrays
     vertex_count: u31,
@@ -123,40 +125,63 @@ pub struct Mesh {
 
     // Vertex attributes data
     /// Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
-    vertices: *mut [f32; 3],
+    vertices: Option<DataBuf<[f32; 3]>>,
     /// Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
-    texcoords: *mut [f32; 2],
+    texcoords: Option<DataBuf<[f32; 2]>>,
     /// Vertex texture second coordinates (UV - 2 components per vertex) (shader-location = 5)
-    texcoords2: *mut [f32; 2],
+    texcoords2: Option<DataBuf<[f32; 2]>>,
     /// Vertex normals (XYZ - 3 components per vertex) (shader-location = 2)
-    normals: *mut [f32; 3],
+    normals: Option<DataBuf<[f32; 3]>>,
     /// Vertex tangents (XYZW - 4 components per vertex) (shader-location = 4)
-    tangents: *mut [f32; 4],
+    tangents: Option<DataBuf<[f32; 4]>>,
     /// Vertex colors (RGBA - 4 components per vertex) (shader-location = 3)
-    colors: *mut [u8; 4],
+    colors: Option<DataBuf<[u8; 4]>>,
     /// Vertex indices (in case vertex data comes indexed)
-    indices: *mut [u16; 3],
+    indices: Option<DataBuf<[u16; 3]>>,
 
     // Animation vertex data
     /// Animated vertex positions (after bones transformations)
-    anim_vertices: *mut [f32; 3],
+    anim_vertices: Option<DataBuf<[f32; 3]>>,
     /// Animated normals (after bones transformations)
-    anim_normals: *mut [f32; 3],
+    anim_normals: Option<DataBuf<[f32; 3]>>,
     /// Vertex bone ids, max 255 bone ids, up to 4 bones influence by vertex (skinning) (shader-location = 6)
-    bone_ids: *mut u8,
+    bone_ids: Option<DataBuf<u8>>,
     /// Vertex bone weight, up to 4 bones influence by vertex (skinning) (shader-location = 7)
-    bone_weights: *mut f32,
+    bone_weights: Option<DataBuf<f32>>,
     /// Bones animated transformation matrices
-    bone_matrices: *mut Matrix,
+    bone_matrices: Option<DataBuf<Matrix>>,
     /// Number of bones
     bone_count: u31,
 
     // OpenGL identifiers
     /// OpenGL Vertex Array Object id
-    vao_id: NonZeroU32,
+    pub vao_id: NonZeroU32,
     /// OpenGL Vertex Buffer Objects id (default vertex data)
-    vbo_id: NonNull<[u32; MAX_MESH_VERTEX_BUFFERS]>,
+    pub vbo_id: DataBuf<[u32; MAX_MESH_VERTEX_BUFFERS]>,
 }
+
+#[rustfmt::skip]
+const _: () = {
+    assert!(std::mem::size_of::<Mesh>() == std::mem::size_of::<ffi::Mesh>());
+    assert!(std::mem::align_of::<Mesh>() == std::mem::align_of::<ffi::Mesh>());
+    assert!(std::mem::offset_of!(Mesh, vertex_count) == std::mem::offset_of!(ffi::Mesh, vertexCount));
+    assert!(std::mem::offset_of!(Mesh, triangle_count) == std::mem::offset_of!(ffi::Mesh, triangleCount));
+    assert!(std::mem::offset_of!(Mesh, vertices) == std::mem::offset_of!(ffi::Mesh, vertices));
+    assert!(std::mem::offset_of!(Mesh, texcoords) == std::mem::offset_of!(ffi::Mesh, texcoords));
+    assert!(std::mem::offset_of!(Mesh, texcoords2) == std::mem::offset_of!(ffi::Mesh, texcoords2));
+    assert!(std::mem::offset_of!(Mesh, normals) == std::mem::offset_of!(ffi::Mesh, normals));
+    assert!(std::mem::offset_of!(Mesh, tangents) == std::mem::offset_of!(ffi::Mesh, tangents));
+    assert!(std::mem::offset_of!(Mesh, colors) == std::mem::offset_of!(ffi::Mesh, colors));
+    assert!(std::mem::offset_of!(Mesh, indices) == std::mem::offset_of!(ffi::Mesh, indices));
+    assert!(std::mem::offset_of!(Mesh, anim_vertices) == std::mem::offset_of!(ffi::Mesh, animVertices));
+    assert!(std::mem::offset_of!(Mesh, anim_normals) == std::mem::offset_of!(ffi::Mesh, animNormals));
+    assert!(std::mem::offset_of!(Mesh, bone_ids) == std::mem::offset_of!(ffi::Mesh, boneIds));
+    assert!(std::mem::offset_of!(Mesh, bone_weights) == std::mem::offset_of!(ffi::Mesh, boneWeights));
+    assert!(std::mem::offset_of!(Mesh, bone_matrices) == std::mem::offset_of!(ffi::Mesh, boneMatrices));
+    assert!(std::mem::offset_of!(Mesh, bone_count) == std::mem::offset_of!(ffi::Mesh, boneCount));
+    assert!(std::mem::offset_of!(Mesh, vao_id) == std::mem::offset_of!(ffi::Mesh, vaoId));
+    assert!(std::mem::offset_of!(Mesh, vbo_id) == std::mem::offset_of!(ffi::Mesh, vboId));
+};
 
 impl Drop for Mesh {
     #[inline]
@@ -165,110 +190,6 @@ impl Drop for Mesh {
         // SAFETY:
         unsafe { std::ptr::copy_nonoverlapping(std::ptr::from_ref(self), mesh.as_mut_ptr(), 1) };
     }
-}
-
-macro_rules! ptr_slice_accessor {
-    (
-        $(
-            $(#[$m:meta])*
-            fn $field:ident($self:ident) -> [$T:ty; $count:expr];
-        )*
-    ) => {
-        paste::paste!($(
-            $(#[$m])*
-            #[inline]
-            pub const fn $field(&$self) -> &[$T] {
-                if $self.$field.is_null() {
-                    &mut []
-                } else {
-                    let len = $count;
-                    // SAFETY: Taking `self` by reference guarantees aliasing rules are followed.
-                    // $field is guaranteed to be valid and initialized for $count elements.
-                    unsafe {
-                        std::slice::from_raw_parts(
-                            $self.$field.cast::<$T>(),
-                            len,
-                        )
-                    }
-                }
-            }
-            $(#[$m])*
-            #[inline]
-            pub const fn [<$field _mut>](&mut $self) -> &mut [$T] {
-                if $self.$field.is_null() {
-                    &mut []
-                } else {
-                    let len = $count;
-                    // SAFETY: Taking `self` by mutable reference guarantees aliasing rules are followed.
-                    // $field is guaranteed to be valid and initialized for $count elements.
-                    unsafe {
-                        std::slice::from_raw_parts_mut(
-                            $self.$field.cast::<$T>(),
-                            len,
-                        )
-                    }
-                }
-            }
-        )*);
-    };
-
-    (
-        $(
-            $(#[$m:meta])*
-            fn $field:ident($self:ident: NonNull) -> [$T:ty; $count:expr];
-        )*
-    ) => {
-        paste::paste!($(
-            $(#[$m])*
-            #[inline]
-            pub const fn $field(&$self) -> &[$T] {
-                let len = $count;
-                // SAFETY: Taking `self` by reference guarantees aliasing rules are followed.
-                // $field is guaranteed to be valid and initialized for $count elements.
-                unsafe {
-                    NonNull::slice_from_raw_parts(
-                        $self.$field.cast::<$T>(),
-                        len,
-                    ).as_ref()
-                }
-            }
-            $(#[$m])*
-            #[inline]
-            pub const fn [<$field _mut>](&mut $self) -> &mut [$T] {
-                let len = $count;
-                // SAFETY: Taking `self` by mutable reference guarantees aliasing rules are followed.
-                // $field is guaranteed to be valid and initialized for $count elements.
-                unsafe {
-                    NonNull::slice_from_raw_parts(
-                        $self.$field.cast::<$T>(),
-                        len,
-                    ).as_mut()
-                }
-            }
-        )*);
-    };
-
-    (
-        $(
-            $(#[$m:meta])*
-            fn $field:ident($self:ident) -> ref $T:ty;
-        )*
-    ) => {
-        paste::paste!($(
-            #[inline]
-            pub const fn $field(&self) -> &$T {
-                // SAFETY: Taking `self` by reference guarantees aliasing rules are followed.
-                // $field is guaranteed to be valid and initialized.
-                unsafe { self.$field.cast::<$T>().as_ref() }
-            }
-            #[inline]
-            pub const fn [<$field _mut>](&mut self) -> &mut $T {
-                // SAFETY: Taking `self` by mutable reference guarantees aliasing rules are followed.
-                // $field is guaranteed to be valid and initialized.
-                unsafe { self.$field.cast::<$T>().as_mut() }
-            }
-        )*);
-    };
 }
 
 impl Mesh {
@@ -280,33 +201,17 @@ impl Mesh {
     ///
     /// - `mesh` must be a valid mesh that has been successfully uploaded and has not been unloaded.
     /// - `mesh` cannot have any aliases.
+    /// - All pointer fields must adhere to [`DataBuf`] safety.
     #[inline]
     pub const unsafe fn try_from_raw(mesh: ffi::Mesh) -> Option<Self> {
-        if let Some(vertex_count) = u31::try_from_i32(mesh.vertexCount)
-            && let Some(triangle_count) = u31::try_from_i32(mesh.triangleCount)
-            && let Some(bone_count) = u31::try_from_i32(mesh.boneCount)
-            && let Some(vao_id) = NonZeroU32::new(mesh.vaoId)
-            && let Some(vbo_id) = NonNull::new(mesh.vboId.cast())
+        if mesh.vertexCount >= 0
+            && mesh.triangleCount >= 0
+            && mesh.boneCount >= 0
+            && mesh.vaoId != 0
+            && !mesh.vboId.is_null()
         {
-            Some(Self {
-                vertex_count,
-                triangle_count,
-                vertices: mesh.vertices.cast::<[f32; 3]>(),
-                texcoords: mesh.texcoords.cast::<[f32; 2]>(),
-                texcoords2: mesh.texcoords2.cast::<[f32; 2]>(),
-                normals: mesh.normals.cast::<[f32; 3]>(),
-                tangents: mesh.tangents.cast::<[f32; 4]>(),
-                colors: mesh.colors.cast::<[u8; 4]>(),
-                indices: mesh.indices.cast::<[u16; 3]>(),
-                anim_vertices: mesh.animVertices.cast::<[f32; 3]>(),
-                anim_normals: mesh.animNormals.cast::<[f32; 3]>(),
-                bone_ids: mesh.boneIds,
-                bone_weights: mesh.boneWeights,
-                bone_matrices: mesh.boneMatrices.cast::<Matrix>(),
-                bone_count,
-                vao_id,
-                vbo_id,
-            })
+            // SAFETY: Just checked all testable; caller must uphold remaining safety contract
+            Some(unsafe { Self::from_raw_unchecked(mesh) })
         } else {
             None
         }
@@ -321,79 +226,25 @@ impl Mesh {
     /// - `vertex_count`, `triangle_count`, and `bone_count` cannot be negative.
     /// - `vao_id` cannot be 0.
     /// - `vbo_id` cannot be null.
+    /// - All pointer fields must adhere to [`DataBuf`] safety.
     #[inline]
     pub const unsafe fn from_raw_unchecked(mesh: ffi::Mesh) -> Self {
-        Self {
-            // SAFETY: Caller must uphold safety contract
-            vertex_count: unsafe { u31::from_i32_unchecked(mesh.vertexCount) },
-            // SAFETY: Caller must uphold safety contract
-            triangle_count: unsafe { u31::from_i32_unchecked(mesh.triangleCount) },
-            vertices: mesh.vertices.cast::<[f32; 3]>(),
-            texcoords: mesh.texcoords.cast::<[f32; 2]>(),
-            texcoords2: mesh.texcoords2.cast::<[f32; 2]>(),
-            normals: mesh.normals.cast::<[f32; 3]>(),
-            tangents: mesh.tangents.cast::<[f32; 4]>(),
-            colors: mesh.colors.cast::<[u8; 4]>(),
-            indices: mesh.indices.cast::<[u16; 3]>(),
-            anim_vertices: mesh.animVertices.cast::<[f32; 3]>(),
-            anim_normals: mesh.animNormals.cast::<[f32; 3]>(),
-            bone_ids: mesh.boneIds,
-            bone_weights: mesh.boneWeights,
-            bone_matrices: mesh.boneMatrices.cast::<Matrix>(),
-            // SAFETY: Caller must uphold safety contract
-            bone_count: unsafe { u31::from_i32_unchecked(mesh.boneCount) },
-            // SAFETY: Caller must uphold safety contract
-            vao_id: unsafe { NonZeroU32::new_unchecked(mesh.vaoId) },
-            // SAFETY: Caller must uphold safety contract
-            vbo_id: unsafe { NonNull::new_unchecked(mesh.vboId.cast()) },
-        }
+        // SAFETY: Mesh and ffi::Mesh have the same layout
+        unsafe { std::mem::transmute::<ffi::Mesh, Mesh>(mesh) }
     }
 
+    /// Construct a [`WeakMesh`] referencing the same mesh resource as `self`.
+    ///
+    /// This method is safe, but certain operations on the contents of the returned [`WeakMesh`] are not.
     #[inline]
     pub const fn make_weak(&self) -> WeakMesh<'_> {
         WeakMesh(
-            ffi::Mesh {
-                vertexCount: self.vertex_count.as_i32(),
-                triangleCount: self.triangle_count.as_i32(),
-                vertices: self.vertices.cast(),
-                texcoords: self.texcoords.cast(),
-                texcoords2: self.texcoords2.cast(),
-                normals: self.normals.cast(),
-                tangents: self.tangents.cast(),
-                colors: self.colors.cast(),
-                indices: self.indices.cast(),
-                animVertices: self.anim_vertices.cast(),
-                animNormals: self.anim_normals.cast(),
-                boneIds: self.bone_ids,
-                boneWeights: self.bone_weights,
-                boneMatrices: self.bone_matrices.cast(),
-                boneCount: self.bone_count.as_i32(),
-                vaoId: self.vao_id.get(),
-                vboId: self.vbo_id.cast().as_ptr(),
-            },
+            // SAFETY: Mesh and ffi::Mesh have the same layout.
+            // Taking `self` by reference ensures it cannot be mutated while there are any weak copies.
+            unsafe { std::mem::transmute_copy::<Mesh, ffi::Mesh>(self) },
             PhantomData,
         )
     }
-
-    ptr_slice_accessor!(
-        fn vertices(self) -> [Vector3; self.vertex_count.as_usize()];
-        fn texcoords(self) -> [Vector2; self.vertex_count.as_usize()];
-        fn texcoords2(self) -> [Vector2; self.vertex_count.as_usize()];
-        fn normals(self) -> [Vector3; self.vertex_count.as_usize()];
-        fn tangents(self) -> [ffi::Vector4; self.vertex_count.as_usize()];
-        fn colors(self) -> [Color; self.vertex_count.as_usize()];
-        fn indices(self) -> [u16; self.triangle_count.as_usize() * 3];
-
-        fn anim_vertices(self) -> [Vector3; self.vertex_count.as_usize()];
-        fn anim_normals(self) -> [Vector3; self.vertex_count.as_usize()];
-        fn bone_ids(self) -> [u8; self.bone_count.as_usize()];
-        fn bone_weights(self) -> [f32; self.bone_count.as_usize()];
-        fn bone_matrices(self) -> [Matrix; self.bone_count.as_usize()];
-    );
-
-    ptr_slice_accessor!(
-        fn vbo_id(self) -> ref [u32; MAX_MESH_VERTEX_BUFFERS];
-    );
 }
 
 /// MaterialMap
@@ -430,11 +281,7 @@ pub struct Material {
     pub params: [f32; 4],
 }
 
-impl Material {
-    ptr_slice_accessor!(
-        fn maps(self) -> ref [MaybeUninit<MaterialMap>; MAX_MATERIAL_MAPS];
-    );
-}
+impl Material {}
 
 /// Bone, skeletal animation bone
 #[derive(Debug)]
@@ -509,16 +356,7 @@ pub struct Model {
     bind_pose: NonNull<ffi::Transform>,
 }
 
-impl Model {
-    ptr_slice_accessor!(
-        fn meshes(self: NonNull) -> [ffi::Mesh; self.mesh_count.as_usize()];
-        fn materials(self: NonNull) -> [ffi::Material; self.material_count.as_usize()];
-        fn mesh_material(self: NonNull) -> [i32; self.mesh_count.as_usize()];
-
-        fn bones(self: NonNull) -> [ffi::BoneInfo; self.bone_count.as_usize()];
-        fn bind_pose(self: NonNull) -> [ffi::Transform; self.bone_count.as_usize()];
-    );
-}
+impl Model {}
 
 #[derive(Debug)]
 #[repr(transparent)]
