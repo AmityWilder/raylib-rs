@@ -2,9 +2,9 @@
 
 use raylib_sys::Rectangle;
 
+use crate::core::RaylibHandle;
 use crate::core::texture::Texture2D;
 use crate::core::vr::VrStereoConfig;
-use crate::core::{RaylibHandle, RaylibThread};
 use crate::math::Matrix;
 use crate::math::Vector2;
 use crate::math::Vector3;
@@ -22,18 +22,17 @@ impl RaylibHandle {
     #[must_use]
     /// Setup canvas (framebuffer) to start drawing.
     /// Prefer using the closure version, [RaylibHandle::draw]. This version returns a handle that calls [raylib_sys::EndDrawing] at the end of the scope and is provided as a fallback incase you run into issues with closures(such as lifetime or performance reasons)
-    pub fn begin_drawing<'a>(&'a mut self, _: &RaylibThread) -> RaylibDrawHandle<'a> {
+    pub fn begin_drawing<'a>(&'a mut self) -> RaylibDrawHandle<'a> {
         unsafe {
             ffi::BeginDrawing();
         };
 
-        let d = RaylibDrawHandle(self);
-        d
+        RaylibDrawHandle(self)
     }
     /// Setup canvas (framebuffer) to start drawing.
     // Every FnMut is a FnOnce, but not every FnOnce is a FnMut. The closure may possibly execute multiple times throughout the program, but not multiple times in a single call to this method.
     // Taking a FnOnce instead of a FnMut when the function only needs to be called once in this method makes the method slightly more versatile/less needlessly restrictive for no actual cost.
-    pub fn draw<'a>(&'a mut self, _: &RaylibThread, func: impl FnOnce(RaylibDrawHandle<'a>)) {
+    pub fn draw<'a>(&'a mut self, func: impl FnOnce(RaylibDrawHandle<'a>)) {
         unsafe {
             ffi::BeginDrawing();
         };
@@ -50,12 +49,12 @@ pub struct RaylibDrawHandle<'a>(&'a mut RaylibHandle);
 impl<'a> RaylibDrawHandle<'a> {
     #[deprecated = "Calling begin_drawing within RaylibDrawHandle will result in a runtime error."]
     #[doc(hidden)]
-    pub fn begin_drawing(&'_ mut self, _: &RaylibThread) -> RaylibDrawHandle<'_> {
+    pub fn begin_drawing(&'_ mut self) -> RaylibDrawHandle<'_> {
         panic!("Nested begin_drawing call")
     }
     #[deprecated = "Calling draw within RaylibDrawHandle will result in a runtime error."]
     #[doc(hidden)]
-    pub fn draw(&mut self, _: &RaylibThread, mut _func: impl FnMut(RaylibDrawHandle)) {
+    pub fn draw(&mut self, mut _func: impl FnMut(RaylibDrawHandle)) {
         panic!("Nested draw call")
     }
 }
@@ -72,7 +71,7 @@ impl<'a> std::ops::Deref for RaylibDrawHandle<'a> {
     type Target = RaylibHandle;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 
@@ -102,7 +101,7 @@ impl<'a, 'b, T: 'a> std::ops::Deref for RaylibTextureMode<'a, 'b, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 impl<'a, 'b, T: 'a> std::ops::DerefMut for RaylibTextureMode<'a, 'b, T> {
@@ -122,7 +121,6 @@ where
     #[must_use]
     fn begin_texture_mode<'a, 'b>(
         &'a mut self,
-        _: &RaylibThread,
         framebuffer: &'b mut ffi::RenderTexture2D,
     ) -> RaylibTextureMode<'a, 'b, Self> {
         unsafe { ffi::BeginTextureMode(*framebuffer) }
@@ -132,7 +130,6 @@ where
     /// Begin drawing to render texture.
     fn draw_texture_mode<'a, 'b>(
         &'a mut self,
-        _: &RaylibThread,
         framebuffer: &'b mut ffi::RenderTexture2D,
         func: impl FnOnce(RaylibTextureMode<'a, 'b, Self>),
     ) {
@@ -165,7 +162,7 @@ impl<'a, 'b, T: 'a> std::ops::Deref for RaylibVRMode<'a, 'b, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 
@@ -179,7 +176,6 @@ where
     #[must_use]
     fn begin_vr_stereo_mode<'a, 'b>(
         &'a mut self,
-        _: &RaylibThread,
         vr_config: &'b mut VrStereoConfig,
     ) -> RaylibVRMode<'a, 'b, Self> {
         unsafe { ffi::BeginVrStereoMode(*vr_config.as_ref()) }
@@ -214,7 +210,7 @@ impl<'a, T: 'a> std::ops::Deref for RaylibMode2D<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 impl<'a, T: 'a> std::ops::DerefMut for RaylibMode2D<'a, T> {
@@ -272,7 +268,7 @@ impl<'a, T: 'a> std::ops::Deref for RaylibMode3D<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 impl<'a, T: 'a> std::ops::DerefMut for RaylibMode3D<'a, T> {
@@ -332,7 +328,7 @@ impl<'a, 'b, T: 'a> std::ops::Deref for RaylibShaderMode<'a, 'b, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 impl<'a, 'b, T: 'a> std::ops::DerefMut for RaylibShaderMode<'a, 'b, T> {
@@ -386,7 +382,7 @@ impl<'a, T: 'a> std::ops::Deref for RaylibBlendMode<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 impl<'a, T: 'a> std::ops::DerefMut for RaylibBlendMode<'a, T> {
@@ -440,7 +436,7 @@ impl<'a, T: 'a> std::ops::Deref for RaylibScissorMode<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0
     }
 }
 impl<'a, T: 'a> std::ops::DerefMut for RaylibScissorMode<'a, T> {

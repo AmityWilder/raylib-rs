@@ -46,11 +46,7 @@ pub fn check_collision_point_circle(
 #[must_use]
 pub fn check_collision_point_poly(point: impl Into<ffi::Vector2>, points: &[Vector2]) -> bool {
     unsafe {
-        ffi::CheckCollisionPointPoly(
-            point.into(),
-            std::mem::transmute(points.as_ptr()),
-            points.len() as i32,
-        )
+        ffi::CheckCollisionPointPoly(point.into(), points.as_ptr().cast(), points.len() as i32)
     }
 }
 
@@ -98,11 +94,7 @@ pub fn check_collision_lines(
             &mut out,
         )
     };
-    if collision {
-        return Some(out.into());
-    } else {
-        return None;
-    }
+    collision.then_some(out.into())
 }
 
 /// Detects collision between two spheres.

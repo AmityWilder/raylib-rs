@@ -1,6 +1,6 @@
 //! Window manipulation functions
+use crate::core::RaylibHandle;
 use crate::core::math::{Matrix, Ray, Vector2};
-use crate::core::{RaylibHandle, RaylibThread};
 use crate::{MintVec2, MintVec3, ffi};
 use std::ffi::{CStr, CString, IntoStringError, NulError};
 use std::os::raw::c_char;
@@ -330,7 +330,6 @@ pub fn get_monitor_physical_height(monitor: i32) -> i32 {
 /// Get name of monitor
 /// Only checks that monitor index is in range in debug mode
 #[inline]
-#[must_use]
 pub fn get_monitor_name(monitor: i32) -> Result<String, IntoStringError> {
     let len = get_monitor_count();
     debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
@@ -365,7 +364,6 @@ pub fn get_monitor_position(monitor: i32) -> Vector2 {
 ///     Ok(())
 /// }
 /// ```
-#[must_use]
 pub fn get_monitor_info(monitor: i32) -> Result<MonitorInfo, IntoStringError> {
     let len = get_monitor_count();
     debug_assert!(monitor < len && monitor >= 0, "monitor index out of range");
@@ -382,17 +380,15 @@ pub fn get_monitor_info(monitor: i32) -> Result<MonitorInfo, IntoStringError> {
 
 /// Returns camera transform matrix (view matrix)
 /// ```rust
-/// use raylib::prelude::*;
-/// fn main() {
-///     let c = Camera::perspective(
-///            Vector3::new(0.0, 0.0, 0.0),
-///            Vector3::new(0.0, 0.0, -1.0),
-///            Vector3::new(0.0, 1.0, 0.0),
-///            90.0,
-///        );
-///        let m = get_camera_matrix(&c);
-///        assert_eq!(m, Matrix::identity());
-/// }
+/// # use raylib::prelude::*;
+/// let c = Camera::perspective(
+///     Vector3::new(0.0, 0.0, 0.0),
+///     Vector3::new(0.0, 0.0, -1.0),
+///     Vector3::new(0.0, 1.0, 0.0),
+///     90.0,
+/// );
+/// let m = get_camera_matrix(&c);
+/// assert_eq!(m, Matrix::identity());
 /// ```
 #[must_use]
 pub fn get_camera_matrix(camera: impl Into<ffi::Camera>) -> Matrix {
@@ -401,15 +397,13 @@ pub fn get_camera_matrix(camera: impl Into<ffi::Camera>) -> Matrix {
 
 /// Returns camera 2D transform matrix (view matrix)
 /// ```rust
-/// use raylib::prelude::*;
-/// fn main() {
-///     let c = Camera2D::default();
-///     let m = get_camera_matrix2D(&c);
-///     let mut check = Matrix::zero();
-///     check.m10 = 1.0;
-///     check.m15 = 1.0;
-///     assert_eq!(m, check);
-/// }
+/// # use raylib::prelude::*;
+/// let c = Camera2D::default();
+/// let m = get_camera_matrix2D(&c);
+/// let mut check = Matrix::zero();
+/// check.m10 = 1.0;
+/// check.m15 = 1.0;
+/// assert_eq!(m, check);
 /// ```
 #[allow(non_snake_case)]
 #[must_use]
@@ -418,7 +412,6 @@ pub fn get_camera_matrix2D(camera: impl Into<ffi::Camera2D>) -> Matrix {
 }
 
 impl RaylibHandle {
-    #[must_use]
     /// Get clipboard text content
     pub fn get_clipboard_text(&self) -> Result<String, std::str::Utf8Error> {
         unsafe {
@@ -733,7 +726,7 @@ impl RaylibHandle {
 
     /// Sets title for window (only on desktop platforms).
     #[inline]
-    pub fn set_window_title(&self, _: &RaylibThread, title: &str) {
+    pub fn set_window_title(&self, title: &str) {
         let c_title = CString::new(title).unwrap();
         unsafe {
             ffi::SetWindowTitle(c_title.as_ptr());

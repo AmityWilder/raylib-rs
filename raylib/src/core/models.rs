@@ -1,13 +1,13 @@
 //! 3D Model, Mesh, and Animation
 
 use crate::MintVec3;
+use crate::core::RaylibHandle;
 use crate::core::databuf::DataBuf;
 use crate::core::math::BoundingBox;
 use crate::core::math::Matrix;
 use crate::core::math::Transform;
 use crate::core::math::{Vector2, Vector3, Vector4};
 use crate::core::texture::Image;
-use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi::Color;
 use crate::{
     consts,
@@ -91,14 +91,9 @@ impl Clone for WeakModelAnimation {
 }
 
 impl RaylibHandle {
-    #[must_use]
     /// Loads model from files (mesh and material).
     // #[inline]
-    pub fn load_model(
-        &mut self,
-        _: &RaylibThread,
-        filename: &str,
-    ) -> Result<Model, LoadModelError> {
+    pub fn load_model(&mut self, filename: &str) -> Result<Model, LoadModelError> {
         let c_filename = CString::new(filename).unwrap();
         let m = unsafe { ffi::LoadModel(c_filename.as_ptr()) };
         if m.meshes.is_null() && m.materials.is_null() && m.bones.is_null() && m.bindPose.is_null()
@@ -111,13 +106,8 @@ impl RaylibHandle {
         Ok(Model(m))
     }
 
-    #[must_use]
     /// Loads model from a generated mesh
-    pub fn load_model_from_mesh(
-        &mut self,
-        _: &RaylibThread,
-        mesh: WeakMesh,
-    ) -> Result<Model, LoadModelError> {
+    pub fn load_model_from_mesh(&mut self, mesh: WeakMesh) -> Result<Model, LoadModelError> {
         let m = unsafe { ffi::LoadModelFromMesh(mesh.0) };
 
         if m.meshes.is_null() || m.materials.is_null() {
@@ -127,11 +117,9 @@ impl RaylibHandle {
         Ok(Model(m))
     }
 
-    #[must_use]
     /// Load model animations from file
     pub fn load_model_animations(
         &mut self,
-        _: &RaylibThread,
         filename: &str,
     ) -> Result<Vec<ModelAnimation>, LoadModelAnimError> {
         let c_filename = CString::new(filename).unwrap();
@@ -158,7 +146,6 @@ impl RaylibHandle {
     #[inline]
     pub fn update_model_animation(
         &mut self,
-        _: &RaylibThread,
         mut model: impl AsMut<ffi::Model>,
         anim: impl AsRef<ffi::ModelAnimation>,
         frame: i32,
@@ -172,7 +159,6 @@ impl RaylibHandle {
     #[inline]
     pub fn update_model_animation_bones(
         &mut self,
-        _: &RaylibThread,
         mut model: impl AsMut<ffi::Model>,
         anim: impl AsRef<ffi::ModelAnimation>,
         frame: i32,
@@ -288,7 +274,7 @@ pub trait RaylibModel: AsRef<ffi::Model> + AsMut<ffi::Model> {
         if self.as_ref().bindPose.is_null() {
             return None;
         }
-        Some(unsafe { std::mem::transmute(self.as_ref().bindPose) })
+        Some(unsafe { &*self.as_ref().bindPose.cast() })
     }
     #[inline]
     #[must_use]
@@ -297,7 +283,7 @@ pub trait RaylibModel: AsRef<ffi::Model> + AsMut<ffi::Model> {
         if self.as_ref().bindPose.is_null() {
             return None;
         }
-        Some(unsafe { std::mem::transmute(self.as_mut().bindPose) })
+        Some(unsafe { &mut *self.as_mut().bindPose.cast() })
     }
     #[inline]
     #[must_use]
@@ -461,7 +447,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
     fn indices(&self) -> &[u16] {
         unsafe {
             std::slice::from_raw_parts(
-                self.as_ref().indices as *const u16,
+                self.as_ref().indices.cast_const(),
                 self.as_ref().vertexCount as usize,
             )
         }
@@ -472,7 +458,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
     fn indices_mut(&mut self) -> &mut [u16] {
         unsafe {
             std::slice::from_raw_parts_mut(
-                self.as_mut().indices as *mut u16,
+                self.as_mut().indices,
                 self.as_mut().vertexCount as usize,
             )
         }
@@ -481,81 +467,77 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
     /// Generate polygonal mesh
     #[inline]
     #[must_use]
-    fn gen_mesh_poly(_: &RaylibThread, sides: i32, radius: f32) -> Mesh {
+    fn gen_mesh_poly(_: &RaylibHandle, sides: i32, radius: f32) -> Mesh {
         unsafe { Mesh(ffi::GenMeshPoly(sides, radius)) }
     }
 
     /// Generates plane mesh (with subdivisions).
     #[inline]
     #[must_use]
-    fn gen_mesh_plane(_: &RaylibThread, width: f32, length: f32, res_x: i32, res_z: i32) -> Mesh {
+    fn gen_mesh_plane(_: &RaylibHandle, width: f32, length: f32, res_x: i32, res_z: i32) -> Mesh {
         unsafe { Mesh(ffi::GenMeshPlane(width, length, res_x, res_z)) }
     }
 
     /// Generates cuboid mesh.
     #[inline]
     #[must_use]
-    fn gen_mesh_cube(_: &RaylibThread, width: f32, height: f32, length: f32) -> Mesh {
+    fn gen_mesh_cube(_: &RaylibHandle, width: f32, height: f32, length: f32) -> Mesh {
         unsafe { Mesh(ffi::GenMeshCube(width, height, length)) }
     }
 
     /// Generates sphere mesh (standard sphere).
     #[inline]
     #[must_use]
-    fn gen_mesh_sphere(_: &RaylibThread, radius: f32, rings: i32, slices: i32) -> Mesh {
+    fn gen_mesh_sphere(_: &RaylibHandle, radius: f32, rings: i32, slices: i32) -> Mesh {
         unsafe { Mesh(ffi::GenMeshSphere(radius, rings, slices)) }
     }
 
     /// Generates half-sphere mesh (no bottom cap).
     #[inline]
     #[must_use]
-    fn gen_mesh_hemisphere(_: &RaylibThread, radius: f32, rings: i32, slices: i32) -> Mesh {
+    fn gen_mesh_hemisphere(_: &RaylibHandle, radius: f32, rings: i32, slices: i32) -> Mesh {
         unsafe { Mesh(ffi::GenMeshHemiSphere(radius, rings, slices)) }
     }
 
     /// Generates cylinder mesh.
     #[inline]
     #[must_use]
-    fn gen_mesh_cylinder(_: &RaylibThread, radius: f32, height: f32, slices: i32) -> Mesh {
+    fn gen_mesh_cylinder(_: &RaylibHandle, radius: f32, height: f32, slices: i32) -> Mesh {
         unsafe { Mesh(ffi::GenMeshCylinder(radius, height, slices)) }
     }
 
     /// Generates torus mesh.
     #[inline]
     #[must_use]
-    fn gen_mesh_torus(_: &RaylibThread, radius: f32, size: f32, rad_seg: i32, sides: i32) -> Mesh {
+    fn gen_mesh_torus(_: &RaylibHandle, radius: f32, size: f32, rad_seg: i32, sides: i32) -> Mesh {
         unsafe { Mesh(ffi::GenMeshTorus(radius, size, rad_seg, sides)) }
     }
 
     /// Generates trefoil knot mesh.
     #[inline]
     #[must_use]
-    fn gen_mesh_knot(_: &RaylibThread, radius: f32, size: f32, rad_seg: i32, sides: i32) -> Mesh {
+    fn gen_mesh_knot(_: &RaylibHandle, radius: f32, size: f32, rad_seg: i32, sides: i32) -> Mesh {
         unsafe { Mesh(ffi::GenMeshKnot(radius, size, rad_seg, sides)) }
     }
 
     /// Generates heightmap mesh from image data.
     #[inline]
     #[must_use]
-    fn gen_mesh_heightmap(_: &RaylibThread, heightmap: &Image, size: impl Into<MintVec3>) -> Mesh {
+    fn gen_mesh_heightmap(_: &RaylibHandle, heightmap: &Image, size: impl Into<MintVec3>) -> Mesh {
         unsafe { Mesh(ffi::GenMeshHeightmap(heightmap.0, size.into())) }
     }
 
     /// Generates cubes-based map mesh from image data.
     #[inline]
     #[must_use]
-    fn gen_mesh_cubicmap(
-        _: &RaylibThread,
-        cubicmap: &Image,
-        cube_size: impl Into<MintVec3>,
-    ) -> Mesh {
+    fn gen_mesh_cubicmap(cubicmap: &Image, cube_size: impl Into<MintVec3>) -> Mesh {
         unsafe { Mesh(ffi::GenMeshCubicmap(cubicmap.0, cube_size.into())) }
     }
 
     /// Generate cone/pyramid mesh
     #[inline]
     #[must_use]
-    fn gen_mesh_cone(_: &RaylibThread, radius: f32, height: f32, slices: i32) -> Mesh {
+    fn gen_mesh_cone(_: &RaylibHandle, radius: f32, height: f32, slices: i32) -> Mesh {
         unsafe { Mesh(ffi::GenMeshCone(radius, height, slices)) }
     }
 
@@ -569,7 +551,7 @@ pub trait RaylibMesh: AsRef<ffi::Mesh> + AsMut<ffi::Mesh> {
     /// Computes mesh tangents.
     // NOTE: New VBO for tangents is generated at default location and also binded to mesh VAO
     #[inline]
-    fn gen_mesh_tangents(&mut self, _: &RaylibThread) {
+    fn gen_mesh_tangents(&mut self, _: &RaylibHandle) {
         unsafe {
             ffi::GenMeshTangents(self.as_mut());
         }
@@ -604,7 +586,6 @@ impl Material {
     }
 
     /// Load materials from model file
-    #[must_use]
     pub fn load_materials(filename: &str) -> Result<Vec<Material>, LoadMaterialError> {
         let c_filename = CString::new(filename).unwrap();
         let mut m_size = 0;
@@ -984,39 +965,35 @@ impl RaylibHandle {
     /// Load default material (Supports: DIFFUSE, SPECULAR, NORMAL maps)
     #[inline]
     #[must_use]
-    pub fn load_material_default(&self, _: &RaylibThread) -> WeakMaterial {
+    pub fn load_material_default(&self) -> WeakMaterial {
         WeakMaterial(unsafe { ffi::LoadMaterialDefault() })
     }
 
     /// Weak materials will leak memory if they are not unlaoded
     /// Unload material from GPU memory (VRAM)
     #[inline]
-    pub unsafe fn unload_material(&mut self, _: &RaylibThread, material: WeakMaterial) {
+    pub unsafe fn unload_material(&mut self, material: WeakMaterial) {
         unsafe { ffi::UnloadMaterial(*material.as_ref()) }
     }
 
     /// Weak models will leak memory if they are not unlaoded
     /// Unload model from GPU memory (VRAM)
     #[inline]
-    pub unsafe fn unload_model(&mut self, _: &RaylibThread, model: WeakModel) {
+    pub unsafe fn unload_model(&mut self, model: WeakModel) {
         unsafe { ffi::UnloadModel(*model.as_ref()) }
     }
 
     /// Weak model_animations will leak memory if they are not unlaoded
     /// Unload model_animation from GPU memory (VRAM)
     #[inline]
-    pub unsafe fn unload_model_animation(
-        &mut self,
-        _: &RaylibThread,
-        model_animation: WeakModelAnimation,
-    ) {
+    pub unsafe fn unload_model_animation(&mut self, model_animation: WeakModelAnimation) {
         unsafe { ffi::UnloadModelAnimation(*model_animation.as_ref()) }
     }
 
     /// Weak meshs will leak memory if they are not unlaoded
     /// Unload mesh from GPU memory (VRAM)
     #[inline]
-    pub unsafe fn unload_mesh(&mut self, _: &RaylibThread, mesh: WeakMesh) {
+    pub unsafe fn unload_mesh(&mut self, mesh: WeakMesh) {
         unsafe { ffi::UnloadMesh(*mesh.as_ref()) }
     }
 }
@@ -1094,7 +1071,7 @@ fn slice_to_rl_ptr<'a, T: Copy + 'a, U: 'a>(
             // ok:  {AAAA} -> {AA}{AA}
             // bad: {AAAA} -> {AAA}{A??}
             assert!(
-                (std::mem::size_of_val(data) % std::mem::size_of::<U>()) == 0,
+                std::mem::size_of_val(data).is_multiple_of(std::mem::size_of::<U>()),
                 "should not cast to a type whose size does not evenly divide the source",
             );
             // ok:  {AAAA|BBBB} -> {AA|AA|BB|BB}
@@ -1108,7 +1085,7 @@ fn slice_to_rl_ptr<'a, T: Copy + 'a, U: 'a>(
             // ok:  {AAAA|BBBB} -> {AA}{AA}{BB}{BB}
             // bad: {AAAA|BBBB} -> {AAA|ABB}{BB?|???}
             assert!(
-                (std::mem::align_of::<T>() % std::mem::align_of::<U>()) == 0,
+                std::mem::align_of::<T>().is_multiple_of(std::mem::align_of::<U>()),
                 "should not cast to a type whose alignment does not evenly divide the source alignment",
             );
             DataBuf::<[T]>::alloc_from_copy(data)?
@@ -1236,7 +1213,7 @@ impl<'a> MeshBuilder<'a> {
     }
 
     /// Complete and upload the [`Mesh`].
-    pub fn build(&self, _thread: &RaylibThread) -> Result<Mesh, GenMeshError> {
+    pub fn build(&self, _: &RaylibHandle) -> Result<Mesh, GenMeshError> {
         let (vertex_count, triangle_count) = self.check_mesh()?;
         let raw_mesh = ffi::Mesh {
             vertexCount: vertex_count.try_into().unwrap(),
@@ -1250,7 +1227,7 @@ impl<'a> MeshBuilder<'a> {
             indices: slice_to_rl_ptr(self.indices)?,
             ..Default::default()
         };
-        // SAFETY: Borrowing `RaylibThread` guarantees this is the thread the resourece was created from,
+        // SAFETY: Borrowing `RaylibHandle` guarantees this is the thread the resourece was created from,
         // and raw_mesh has no duplicates because it was just created.
         let mut mesh = unsafe { Mesh::from_raw(raw_mesh) };
         // SAFETY: mesh.vertices and mesh.texcoords are valid, initialized, unique, and safe to dereference.

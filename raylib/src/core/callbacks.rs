@@ -219,7 +219,7 @@ pub fn set_load_file_text_callback<'a>(cb: fn(&str) -> String) -> Result<(), Set
 /// should not be moved again! -> use Pin<..>)
 pub struct AudioStreamProcessorCallback<'a, F>
 where
-    F: FnMut(&mut [f32], u32) -> (),
+    F: FnMut(&mut [f32], u32),
 {
     rust_callback: &'a mut F,
     nb_channels: u32,
@@ -228,7 +228,7 @@ where
 
 impl<'a, F> AudioStreamProcessorCallback<'a, F>
 where
-    F: FnMut(&mut [f32], u32) -> (),
+    F: FnMut(&mut [f32], u32),
 {
     fn new(closure: &'a mut F, nb_channels_from_music: u32) -> Self {
         Self {
@@ -239,7 +239,7 @@ where
     }
 
     fn get_as_user_data(&mut self) -> *mut ::std::os::raw::c_void {
-        return self as *mut Self as *mut ::std::os::raw::c_void;
+        self as *mut Self as *mut ::std::os::raw::c_void
     }
 
     fn get_c_callback(
@@ -256,7 +256,7 @@ where
         user_data: *mut ::std::os::raw::c_void,
         data_ptr: *mut ::std::os::raw::c_void,
         frame_count: ::std::os::raw::c_uint,
-    ) -> () {
+    ) {
         unsafe {
             let stream_processor_callback: &mut Self = user_data.cast::<Self>().as_mut().unwrap();
             let f32_ptr = data_ptr as *mut f32;
@@ -273,7 +273,7 @@ where
 
 impl<'a, F> Drop for AudioStreamProcessorCallback<'a, F>
 where
-    F: FnMut(&mut [f32], u32) -> (),
+    F: FnMut(&mut [f32], u32),
 {
     fn drop(&mut self) {
         if let Some(index) = self.callback_index {
@@ -289,7 +289,7 @@ pub fn attach_audio_stream_processor_to_music<'a, F>(
     processor: &'a mut F,
 ) -> Pin<Box<AudioStreamProcessorCallback<'a, F>>>
 where
-    F: FnMut(&mut [f32], u32) -> () + Send + 'static, // static because the function is executed in another thread
+    F: FnMut(&mut [f32], u32) + Send + 'static, // static because the function is executed in another thread
 {
     let mut stream_processor_callback =
         Box::new(AudioStreamProcessorCallback::<'a, F>::new(processor, 2));
@@ -325,8 +325,8 @@ impl RaylibHandle {
     ///
     /// Whatever you return from your callback will be intentionally leaked as Raylib is relied on to free it.
     #[deprecated = "Decoupled from RaylibHandle. Use [set_load_file_data_callback](core::callbacks::set_load_file_data_callback) instead."]
-    pub fn set_load_file_data_callback<'b>(
-        &'_ mut self,
+    pub fn set_load_file_data_callback(
+        &mut self,
         cb: fn(&str) -> Vec<u8>,
     ) -> Result<(), SetLogError<'_>> {
         set_load_file_data_callback(cb)
@@ -334,7 +334,7 @@ impl RaylibHandle {
     /// Set custom file text data saver
     #[deprecated = "Decoupled from RaylibHandle. Use [set_save_file_text_callback](core::callbacks::set_save_file_text_callback) instead."]
     pub fn set_save_file_text_callback(
-        &'_ mut self,
+        &mut self,
         cb: fn(&str, &str) -> bool,
     ) -> Result<(), SetLogError<'_>> {
         set_save_file_text_callback(cb)
@@ -344,7 +344,7 @@ impl RaylibHandle {
     /// Whatever you return from your callback will be intentionally leaked as Raylib is relied on to free it.
     #[deprecated = "Decoupled from RaylibHandle. Use [set_load_file_text_callback](core::callbacks::set_load_file_text_callback) instead."]
     pub fn set_load_file_text_callback(
-        &'_ mut self,
+        &mut self,
         cb: fn(&str) -> String,
     ) -> Result<(), SetLogError<'_>> {
         set_load_file_text_callback(cb)
@@ -353,7 +353,7 @@ impl RaylibHandle {
     /// Audio thread callback to request new data
     #[deprecated = "Decoupled from RaylibHandle. Use [set_audio_stream_callback](core::callbacks::set_audio_stream_callback) instead."]
     pub fn set_audio_stream_callback(
-        &'_ mut self,
+        &mut self,
         stream: AudioStream,
         cb: fn(&[u8]),
     ) -> Result<(), SetLogError<'_>> {

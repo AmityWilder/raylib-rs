@@ -1,10 +1,6 @@
 use crate::error::Base64Error;
 use crate::{databuf::DataBuf, error::CompressionError, ffi};
-use std::{
-    ffi::{CStr, CString, c_char},
-    mem::MaybeUninit,
-    path::Path,
-};
+use std::{ffi::CString, mem::MaybeUninit, path::Path};
 
 /// Compress data (DEFLATE algorithm)
 /// ```rust
@@ -102,6 +98,6 @@ pub fn decode_data_base64(data: &[u8]) -> Result<DataBuf<[u8]>, Base64Error> {
     c_str.push(0);
 
     let bytes =
-        unsafe { ffi::DecodeDataBase64(c_str.as_ptr() as *const u8, output_size.as_mut_ptr()) };
+        unsafe { ffi::DecodeDataBase64(c_str.as_ptr().cast::<u8>(), output_size.as_mut_ptr()) };
     unsafe { DataBuf::slice_from_raw(bytes, output_size) }.ok_or(Base64Error::DecodeFailed)
 }

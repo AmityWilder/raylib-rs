@@ -1,10 +1,10 @@
 //! Code for the safe manipulation of shaders
 
 use crate::consts::ShaderUniformDataType;
+use crate::core::RaylibHandle;
 use crate::core::math::Matrix;
 use crate::core::math::{Vector2, Vector3, Vector4};
-use crate::core::{RaylibHandle, RaylibThread};
-use crate::{ffi, MintMatrix};
+use crate::{MintMatrix, ffi};
 use std::ffi::CString;
 use std::os::raw::c_void;
 
@@ -20,12 +20,7 @@ make_thin_wrapper!(WeakShader, ffi::Shader, no_drop);
 impl RaylibHandle {
     #[must_use]
     /// Loads a custom shader and binds default locations.
-    pub fn load_shader(
-        &mut self,
-        _: &RaylibThread,
-        vs_filename: Option<&str>,
-        fs_filename: Option<&str>,
-    ) -> Shader {
+    pub fn load_shader(&mut self, vs_filename: Option<&str>, fs_filename: Option<&str>) -> Shader {
         let c_vs_filename = vs_filename.map(|f| CString::new(f).unwrap());
         let c_fs_filename = fs_filename.map(|f| CString::new(f).unwrap());
 
@@ -43,7 +38,6 @@ impl RaylibHandle {
     /// Loads shader from code strings and binds default locations.
     pub fn load_shader_from_memory(
         &mut self,
-        _: &RaylibThread,
         vs_code: Option<&str>,
         fs_code: Option<&str>,
     ) -> Shader {
@@ -62,7 +56,7 @@ impl RaylibHandle {
 
     /// Sets a custom projection matrix (replaces internal projection matrix).
     #[inline]
-    pub fn set_matrix_projection(&mut self, _: &RaylibThread, proj: impl Into<MintMatrix>) {
+    pub fn set_matrix_projection(&mut self, proj: impl Into<MintMatrix>) {
         unsafe {
             ffi::rlSetMatrixProjection(proj.into());
         }
@@ -70,7 +64,7 @@ impl RaylibHandle {
 
     /// Sets a custom modelview matrix (replaces internal modelview matrix).
     #[inline]
-    pub fn set_matrix_modelview(&mut self, _: &RaylibThread, view: impl Into<MintMatrix>) {
+    pub fn set_matrix_modelview(&mut self, view: impl Into<MintMatrix>) {
         unsafe {
             ffi::rlSetMatrixModelview(view.into());
         }
@@ -111,7 +105,7 @@ impl ShaderV for f32 {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_FLOAT;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self as *const f32 as *const c_void
+        std::ptr::from_ref(self).cast()
     }
 }
 
@@ -119,7 +113,7 @@ impl ShaderV for Vector2 {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_VEC2;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self as *const Vector2 as *const c_void
+        std::ptr::from_ref(self).cast()
     }
 }
 
@@ -127,7 +121,7 @@ impl ShaderV for Vector3 {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_VEC3;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self as *const Vector3 as *const c_void
+        std::ptr::from_ref(self).cast()
     }
 }
 
@@ -135,7 +129,7 @@ impl ShaderV for Vector4 {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_VEC4;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self as *const Vector4 as *const c_void
+        std::ptr::from_ref(self).cast()
     }
 }
 
@@ -143,7 +137,7 @@ impl ShaderV for i32 {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_INT;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self as *const i32 as *const c_void
+        std::ptr::from_ref(self).cast()
     }
 }
 
@@ -151,7 +145,7 @@ impl ShaderV for [i32; 2] {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_IVEC2;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self.as_ptr() as *const c_void
+        self.as_ptr().cast()
     }
 }
 
@@ -159,7 +153,7 @@ impl ShaderV for [i32; 3] {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_IVEC3;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self.as_ptr() as *const c_void
+        self.as_ptr().cast()
     }
 }
 
@@ -167,7 +161,7 @@ impl ShaderV for [i32; 4] {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_IVEC4;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self.as_ptr() as *const c_void
+        self.as_ptr().cast()
     }
 }
 
@@ -175,7 +169,7 @@ impl ShaderV for [f32; 2] {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_VEC2;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self.as_ptr() as *const c_void
+        self.as_ptr().cast()
     }
 }
 
@@ -183,7 +177,7 @@ impl ShaderV for [f32; 3] {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_VEC3;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self.as_ptr() as *const c_void
+        self.as_ptr().cast()
     }
 }
 
@@ -191,7 +185,7 @@ impl ShaderV for [f32; 4] {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_VEC4;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self.as_ptr() as *const c_void
+        self.as_ptr().cast()
     }
 }
 
@@ -199,7 +193,7 @@ impl ShaderV for &[i32] {
     const UNIFORM_TYPE: ShaderUniformDataType = ShaderUniformDataType::SHADER_UNIFORM_SAMPLER2D;
     #[inline]
     unsafe fn value(&self) -> *const c_void {
-        self.as_ptr() as *const c_void
+        self.as_ptr().cast()
     }
 }
 

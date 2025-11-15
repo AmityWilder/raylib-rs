@@ -1,11 +1,10 @@
 //! Useful functions that don't fit anywhere else
 
+use crate::core::RaylibHandle;
 use crate::core::texture::Image;
-use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi;
 use std::ffi::CString;
 use std::ops::{Deref, DerefMut, Range};
-use std::usize;
 
 /// Struct for holding the result of RaylibHandle::load_random_sequence.
 /// This is a thin wrapper for an array of i32. The reason it exists is because Raylib expects you
@@ -22,7 +21,7 @@ impl<'a> Deref for RandomSequence<'a> {
 
 impl<'a> DerefMut for RandomSequence<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        self.0
     }
 }
 
@@ -46,13 +45,11 @@ pub struct RandSeqIterator<'a>(RandomSequence<'a>, usize);
 impl<'a> Iterator for RandSeqIterator<'a> {
     type Item = i32;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let ret = self.0.get(self.1);
         self.1 += 1;
-        match ret {
-            Some(a) => Some(*a),
-            None => None,
-        }
+        ret.copied()
     }
 }
 
@@ -81,12 +78,12 @@ impl RaylibHandle {
     #[inline]
     #[must_use]
     /// Load pixels from the screen into a CPU image
-    pub fn load_image_from_screen(&self, _: &RaylibThread) -> Image {
+    pub fn load_image_from_screen(&self) -> Image {
         unsafe { Image(ffi::LoadImageFromScreen()) }
     }
 
     /// Takes a screenshot of current screen (saved a .png)
-    pub fn take_screenshot(&mut self, _: &RaylibThread, filename: &str) {
+    pub fn take_screenshot(&mut self, filename: &str) {
         let c_filename = CString::new(filename).unwrap();
         unsafe {
             ffi::TakeScreenshot(c_filename.as_ptr());

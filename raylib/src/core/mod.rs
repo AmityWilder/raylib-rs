@@ -52,21 +52,20 @@ macro_rules! rstr {
     })
 }
 
-/// This token is used to ensure certain functions are only running on the same
-/// thread raylib was initialized from. This is useful for architectures like macos
-/// where cocoa can only be called from one thread.
-#[derive(Clone, Debug)]
-pub struct RaylibThread(PhantomData<*const ()>);
-
 /// The main interface into the Raylib API.
 ///
 /// This is the way in which you will use the vast majority of Raylib's functionality. A `RaylibHandle` can be constructed using the [`init_window`] function or through a [`RaylibBuilder`] obtained with the [`init`] function.
+///
+/// This token is also used to ensure certain functions are only running on the same
+/// thread raylib was initialized from. This is useful for architectures like macos
+/// where cocoa can only be called from one thread, and synchrizing access to Raylib's
+/// many static globals.
 ///
 /// [`init_window`]: fn.init_window.html
 /// [`RaylibBuilder`]: struct.RaylibBuilder.html
 /// [`init`]: fn.init.html
 #[derive(Debug)]
-pub struct RaylibHandle(()); // inner field is private, preventing manual construction
+pub struct RaylibHandle(PhantomData<*const ()>); // inner field is private, preventing manual construction
 
 impl Drop for RaylibHandle {
     fn drop(&mut self) {
@@ -178,7 +177,7 @@ impl RaylibBuilder {
     /// # Panics
     ///
     /// Attempting to initialize Raylib more than once will result in a panic.
-    pub fn build(&self) -> (RaylibHandle, RaylibThread) {
+    pub fn build(&self) -> RaylibHandle {
         use crate::consts::ConfigFlags::*;
         let mut flags = 0u32;
         if self.fullscreen_mode {
@@ -208,9 +207,7 @@ impl RaylibBuilder {
             ffi::SetTraceLogLevel(self.log_level as i32);
         }
 
-        let rl = init_window(self.width, self.height, &self.title);
-
-        (rl, RaylibThread(PhantomData))
+        init_window(self.width, self.height, &self.title)
     }
 }
 
@@ -231,6 +228,6 @@ fn init_window(width: i32, height: i32, title: &str) -> RaylibHandle {
             panic!("Attempting to create window failed!");
         }
 
-        RaylibHandle(())
+        RaylibHandle(PhantomData)
     }
 }

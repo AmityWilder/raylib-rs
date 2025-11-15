@@ -1,9 +1,9 @@
 //! Text and Font related functions
 //! Text manipulation functions are super unsafe so use rust String functions
 
+use crate::core::RaylibHandle;
 use crate::core::math::Vector2;
 use crate::core::texture::{Image, Texture2D};
-use crate::core::{RaylibHandle, RaylibThread};
 use crate::error::LoadFontError;
 use crate::ffi;
 use crate::ffi::Rectangle;
@@ -83,13 +83,13 @@ impl std::ops::DerefMut for RSliceGlyphInfo {
 
 impl AsRef<ffi::Texture2D> for Font {
     fn as_ref(&self) -> &ffi::Texture2D {
-        return &self.0.texture;
+        &self.0.texture
     }
 }
 
 impl AsRef<ffi::Texture2D> for WeakFont {
     fn as_ref(&self) -> &ffi::Texture2D {
-        return &self.0.texture;
+        &self.0.texture
     }
 }
 
@@ -140,8 +140,7 @@ impl RaylibHandle {
 
     /// Loads font from file into GPU memory (VRAM).
     #[inline]
-    #[must_use]
-    pub fn load_font(&mut self, _: &RaylibThread, filename: &str) -> Result<Font, LoadFontError> {
+    pub fn load_font(&mut self, filename: &str) -> Result<Font, LoadFontError> {
         let c_filename = CString::new(filename).unwrap();
         let f = unsafe { ffi::LoadFont(c_filename.as_ptr()) };
         if f.glyphs.is_null() || f.texture.id == 0 {
@@ -155,10 +154,8 @@ impl RaylibHandle {
     /// Loads font from file with extended parameters.
     /// Supplying None for chars loads the entire character set.
     #[inline]
-    #[must_use]
     pub fn load_font_ex(
         &mut self,
-        _: &RaylibThread,
         filename: &str,
         font_size: i32,
         chars: Option<&str>,
@@ -188,10 +185,8 @@ impl RaylibHandle {
 
     /// Load font from Image (XNA style)
     #[inline]
-    #[must_use]
     pub fn load_font_from_image(
         &mut self,
-        _: &RaylibThread,
         image: &Image,
         key: impl Into<ffi::Color>,
         first_char: i32,
@@ -206,10 +201,8 @@ impl RaylibHandle {
     /// `file_type` refers to the extension, e.g. ".ttf".
     /// You can pass Some(...) to chars to get the desired characters, or None to get the whole set.
     #[inline]
-    #[must_use]
     pub fn load_font_from_memory(
         &mut self,
-        _: &RaylibThread,
         file_type: &str,
         file_data: &[u8],
         font_size: i32,
@@ -280,7 +273,7 @@ impl RaylibHandle {
                 return None;
             }
 
-            return Some(GlyphInfo::from_raw(*glyph_info));
+            Some(GlyphInfo::from_raw(*glyph_info))
         }
     }
 }
@@ -376,10 +369,9 @@ impl Font {
     pub fn make_weak(self) -> WeakFont {
         let w = WeakFont(self.0);
         std::mem::forget(self);
-        return w;
+        w
     }
     /// Returns a new `Font` using provided `GlyphInfo` data and parameters.
-    #[must_use]
     fn from_data(
         chars: &[ffi::GlyphInfo],
         base_size: i32,
@@ -437,7 +429,7 @@ impl Font {
 #[inline]
 #[must_use]
 pub fn gen_image_font_atlas(
-    _: &RaylibThread,
+    _: &RaylibHandle,
     chars: &mut [ffi::GlyphInfo],
     font_size: i32,
     padding: i32,
@@ -460,7 +452,7 @@ pub fn gen_image_font_atlas(
         recs.set_len(chars.len());
         std::ptr::copy(ptr, recs.as_mut_ptr(), chars.len());
         ffi::MemFree(ptr as *mut ::std::os::raw::c_void);
-        return (img, recs);
+        (img, recs)
     }
 }
 

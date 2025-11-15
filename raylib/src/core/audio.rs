@@ -69,7 +69,6 @@ pub struct RaylibAudio(PhantomData<()>);
 impl RaylibAudio {
     /// Initializes audio device and context.
     #[inline]
-    #[must_use]
     pub fn init_audio_device() -> Result<RaylibAudio, AudioInitError> {
         unsafe {
             if ffi::IsAudioDeviceReady() {
@@ -113,7 +112,6 @@ impl RaylibAudio {
 
     /// Loads a new sound from file.
     #[inline]
-    #[must_use]
     pub fn new_sound<'aud>(&'aud self, filename: &str) -> Result<Sound<'aud>, LoadSoundError> {
         let c_filename = CString::new(filename).unwrap();
         let s = unsafe { ffi::LoadSound(c_filename.as_ptr()) };
@@ -128,7 +126,6 @@ impl RaylibAudio {
 
     /// Loads sound from wave data.
     #[inline]
-    #[must_use]
     pub fn new_sound_from_wave<'aud>(
         &'aud self,
         wave: &Wave,
@@ -141,7 +138,6 @@ impl RaylibAudio {
     }
     /// Loads wave data from file into RAM.
     #[inline]
-    #[must_use]
     pub fn new_wave<'aud>(&'aud self, filename: &str) -> Result<Wave<'aud>, LoadSoundError> {
         let c_filename = CString::new(filename).unwrap();
         let w = unsafe { ffi::LoadWave(c_filename.as_ptr()) };
@@ -155,7 +151,6 @@ impl RaylibAudio {
 
     /// Load wave from memory buffer, fileType refers to extension: i.e. '.wav'
     #[inline]
-    #[must_use]
     pub fn new_wave_from_memory<'aud>(
         &'aud self,
         filetype: &str,
@@ -173,7 +168,6 @@ impl RaylibAudio {
 
     /// Loads music stream from file.
     #[inline]
-    #[must_use]
     pub fn new_music<'aud>(&'aud self, filename: &str) -> Result<Music<'aud>, LoadSoundError> {
         let c_filename = CString::new(filename).unwrap();
         let m = unsafe { ffi::LoadMusicStream(c_filename.as_ptr()) };
@@ -187,11 +181,10 @@ impl RaylibAudio {
 
     /// Load music stream from data
     #[inline]
-    #[must_use]
     pub fn new_music_from_memory<'aud>(
         &'aud self,
         filetype: &str,
-        bytes: &Vec<u8>,
+        bytes: &[u8],
     ) -> Result<Music<'aud>, LoadSoundError> {
         let c_filetype = CString::new(filetype).unwrap();
         let w = unsafe {
@@ -221,7 +214,7 @@ impl RaylibAudio {
     }
 }
 
-impl<'aud> Drop for RaylibAudio {
+impl Drop for RaylibAudio {
     #[inline]
     fn drop(&mut self) {
         unsafe { ffi::CloseAudioDevice() }
@@ -270,16 +263,15 @@ impl<'aud> Wave<'aud> {
 
     /// Export wave file. Extension must be .wav or .raw
     #[inline]
-    #[must_use]
     pub fn export(&self, filename: impl AsRef<Path>) -> Result<(), ExportWaveError> {
         let c_filename = CString::new(filename.as_ref().to_string_lossy().as_bytes()).unwrap();
         let success = unsafe { ffi::ExportWave(self.0, c_filename.as_ptr()) };
         if success {
             Ok(())
         } else {
-            // const WAV: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b".wav\0") };
-            const QOA: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b".qoa\0") };
-            // const RAW: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b".raw\0") };
+            // const WAV: &CStr = c".wav";
+            const QOA: &CStr = c".qoa";
+            // const RAW: &CStr = c".raw";
             let is_qoa = unsafe { ffi::IsFileExtension(c_filename.as_ptr(), QOA.as_ptr()) };
             if is_qoa {
                 let samples = self.0.sampleSize as i32;
@@ -745,7 +737,6 @@ impl<'aud> AudioStream<'aud> {
 impl<'bind> Sound<'bind> {
     /// Clone sound from existing sound data, clone does not own wave data
     // NOTE: Wave data must be unallocated manually and will be shared across all clones
-    #[must_use]
     pub fn alias<'snd>(&'snd self) -> Result<SoundAlias<'snd, 'bind>, LoadSoundError> {
         let s = unsafe { ffi::LoadSoundAlias(self.0) };
         if s.stream.buffer.is_null() {

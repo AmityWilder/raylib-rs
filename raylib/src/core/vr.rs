@@ -1,5 +1,5 @@
 //! VR related functions
-use crate::core::{RaylibHandle, RaylibThread};
+use crate::core::RaylibHandle;
 use crate::ffi;
 
 make_thin_wrapper!(
@@ -39,24 +39,24 @@ impl From<ffi::VrDeviceInfo> for VrDeviceInfo {
     }
 }
 
-impl Into<ffi::VrDeviceInfo> for VrDeviceInfo {
-    fn into(self) -> ffi::VrDeviceInfo {
-        unsafe { std::mem::transmute(self) }
+impl From<VrDeviceInfo> for ffi::VrDeviceInfo {
+    fn from(v: VrDeviceInfo) -> Self {
+        unsafe { std::mem::transmute(v) }
     }
 }
 
-impl Into<ffi::VrDeviceInfo> for &VrDeviceInfo {
-    fn into(self) -> ffi::VrDeviceInfo {
+impl From<&VrDeviceInfo> for ffi::VrDeviceInfo {
+    fn from(v: &VrDeviceInfo) -> Self {
         ffi::VrDeviceInfo {
-            hResolution: self.h_resolution,  // Horizontal resolution in pixels
-            vResolution: self.v_resolution,   // Vertical resolution in pixels
-            hScreenSize: self.h_screen_size, // Horizontal size in meters
-            vScreenSize: self.v_screen_size, // Vertical size in meters
-            eyeToScreenDistance: self.eye_to_screen_distance, // Distance between eye and display in meters
-            lensSeparationDistance: self.lens_separation_distance, // Lens separation distance in meters
-            interpupillaryDistance: self.interpupillary_distance, // IPD (distance between pupils) in meters
-            lensDistortionValues: self.lens_distortion_values, // Lens distortion constant parameters
-            chromaAbCorrection: self.chroma_ab_correction, // Chromatic aberration correction parameters
+            hResolution: v.h_resolution,  // Horizontal resolution in pixels
+            vResolution: v.v_resolution,  // Vertical resolution in pixels
+            hScreenSize: v.h_screen_size, // Horizontal size in meters
+            vScreenSize: v.v_screen_size, // Vertical size in meters
+            eyeToScreenDistance: v.eye_to_screen_distance, // Distance between eye and display in meters
+            lensSeparationDistance: v.lens_separation_distance, // Lens separation distance in meters
+            interpupillaryDistance: v.interpupillary_distance, // IPD (distance between pupils) in meters
+            lensDistortionValues: v.lens_distortion_values, // Lens distortion constant parameters
+            chromaAbCorrection: v.chroma_ab_correction, // Chromatic aberration correction parameters
         }
     }
 }
@@ -67,7 +67,6 @@ impl RaylibHandle {
     #[must_use]
     pub fn load_vr_stereo_config(
         &mut self,
-        _: &RaylibThread,
         device: impl Into<ffi::VrDeviceInfo>,
     ) -> VrStereoConfig {
         VrStereoConfig(unsafe { ffi::LoadVrStereoConfig(device.into()) })
