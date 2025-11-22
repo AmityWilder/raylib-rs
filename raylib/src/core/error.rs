@@ -64,6 +64,12 @@ pub enum AllocationError {
 
 #[derive(Error, Debug)]
 pub enum InvalidMeshError {
+    #[error("mesh has vertexCount > 0 but vertices pointer is null")]
+    VerticesPointerNull,
+    #[error("vertexCount or triangleCount is negative")]
+    NegativeCount,
+    #[error("vertexCount is inconsistent with triangles/indices")]
+    VertexCountInsufficient,
     #[error("mesh should have 3 indices/vertices for each triangle")]
     TrianglePointMiscount,
     #[error("indices should be within the number of vertices")]
@@ -110,6 +116,14 @@ pub enum LoadModelError {
     LoadFromFileFailed { path: String },
     #[error("could not load model from mesh")]
     LoadFromMeshFailed,
+    #[error("invalid mesh detected while loading model")]
+    InvalidMesh(#[from] InvalidMeshError),
+    #[error("invalid mesh while loading model from file (path: {path:?})")]
+    InvalidMeshFromFile {
+        path: String,
+        #[source]
+        source: InvalidMeshError,
+    }
 }
 
 #[derive(Error, Debug)]
