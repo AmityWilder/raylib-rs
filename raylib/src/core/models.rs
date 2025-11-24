@@ -7,7 +7,7 @@ use crate::core::math::Matrix;
 use crate::core::math::Transform;
 use crate::core::math::{Vector2, Vector3, Vector4};
 use crate::core::shaders::WeakShader;
-use crate::core::texture::{Image, WeakTexture2D};
+use crate::core::texture::{Image, WeakTexture2D, Texture2D};
 use crate::core::{RaylibHandle, RaylibThread};
 use crate::ffi::Color;
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
 };
 use std::ffi::CString;
 use std::os::raw::c_void;
-use crate::texture::Texture2D;
+use std::ptr::NonNull;
 
 fn no_drop<T>(_thing: T) {}
 make_thick_wrapper! {
@@ -458,11 +458,11 @@ impl Mesh {
     #[inline]
     #[must_use]
     pub fn vertices(&self) -> &[Vector3] {
-        // TODO: consolidate buffer access functions https://github.com/raylib-rs/raylib-rs/pull/257
-        if self.vertexCount == 0 {
-            return &[];
-        }
-        unsafe { std::slice::from_raw_parts(self.vertices, self.vertexCount as usize) }
+        // TODO: consolidate with https://github.com/raylib-rs/raylib-rs/issues/262 and https://github.com/raylib-rs/raylib-rs/pull/257
+        //  vertices are to remain NOT Optional, whereas all other buffer accessors are now Optional -> use NonNull for vertices only
+        NonNull::new(self.vertices.cast()).map_or(&[], |vertices| unsafe {
+            NonNull::slice_from_raw_parts(vertices, self.vertexCount as usize).as_ref()
+        })
     }
     /// Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
     //TODO: This is a rough draft "middle-ground" for studying _mut() access design, for now all functions are labeled unsafe, not intended as a solution
@@ -470,7 +470,9 @@ impl Mesh {
     #[inline]
     #[must_use]
     pub unsafe fn vertices_mut(&mut self) -> &mut [Vector3] {
-        unsafe { std::slice::from_raw_parts_mut(self.vertices, self.vertexCount as usize) }
+        NonNull::new(self.vertices.cast()).map_or(&mut [], |vertices| unsafe {
+            NonNull::slice_from_raw_parts(vertices, self.vertexCount as usize).as_mut()
+        })
     }
     /// Texture Coordinates (UV (or ST) - 2 components per vertex) (shader-location = 1)
     #[inline]
