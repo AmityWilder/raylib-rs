@@ -9,8 +9,142 @@ use crate::ffi;
 use crate::ffi::Rectangle;
 
 use std::convert::{AsRef, TryInto};
-use std::ffi::{CString, OsString};
+use std::ffi::{CStr, CString, OsStr, OsString};
 use std::mem::ManuallyDrop;
+
+/// Converts a string type directly into a type that can be used as a
+/// [`CStr`] in the most efficient manner.
+///
+/// If the user already has access to a [`CStr`], it shouldn't need to
+/// allocate a [`String`] just to be converted into a [`CString`].
+pub trait IntoCStr {
+    /// An intermediate buffer in case an allocation is necessary.
+    /// Most commonly [`CString`], but may instead be [`CStr`] if
+    /// no allocation is needed.
+    type Borrow: AsRef<CStr>;
+
+    /// Convert a string into a [`CStr`] for ffi.
+    fn into_cstr(self) -> Self::Borrow;
+}
+
+impl<'a> IntoCStr for &'a CStr {
+    type Borrow = Self;
+
+    #[inline]
+    fn into_cstr(self) -> Self::Borrow {
+        self
+    }
+}
+
+impl IntoCStr for CString {
+    type Borrow = Self;
+
+    #[inline]
+    fn into_cstr(self) -> Self::Borrow {
+        self
+    }
+}
+
+/// Like [`IntoCStr`] but with the possibility of failing due to
+/// incompatible string formats--most commonly [interior nul bytes](std::ffi::NulError).
+pub trait TryIntoCStr {
+    /// An intermediate buffer in case an allocation is necessary.
+    /// Most commonly [`CString`], but may instead be [`CStr`] if
+    /// no allocation is needed.
+    type Borrow: AsRef<CStr>;
+
+    /// Convert a string into a [`CStr`] for ffi.
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError>;
+}
+
+impl<T: IntoCStr> TryIntoCStr for T {
+    type Borrow = <Self as IntoCStr>::Borrow;
+
+    #[inline]
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError> {
+        Ok(self.into_cstr())
+    }
+}
+
+impl TryIntoCStr for Vec<u8> {
+    type Borrow = <Self as IntoCStr>::Borrow;
+
+    #[inline]
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError> {
+        CString::new(self)
+    }
+}
+
+impl TryIntoCStr for &[u8] {
+    type Borrow = <Self as IntoCStr>::Borrow;
+
+    #[inline]
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError> {
+        CString::new(self)
+    }
+}
+
+impl TryIntoCStr for String {
+    type Borrow = CString;
+
+    #[inline]
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError> {
+        CString::new(self)
+    }
+}
+
+impl TryIntoCStr for &str {
+    type Borrow = CString;
+
+    #[inline]
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError> {
+        CString::new(self)
+    }
+}
+
+/// This implementation converts to a [`CString`] with [`OsString::into_encoded_bytes`],
+/// meaning the string is platform-specific. This is because the most common usecase
+/// for converting an [`OsString`] to a [`CString`] is for filesystem purposes, which
+/// typically use the platform format.
+impl TryIntoCStr for OsString {
+    type Borrow = CString;
+
+    #[inline]
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError> {
+        CString::new(self.into_encoded_bytes())
+    }
+}
+
+/// This implementation converts to a [`CString`] with [`OsStr::as_encoded_bytes`],
+/// meaning the string is platform-specific. This is because the most common usecase
+/// for converting an [`OsStr`] to a [`CString`] is for filesystem purposes, which
+/// typically use the platform format.
+impl TryIntoCStr for &OsStr {
+    type Borrow = CString;
+
+    #[inline]
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError> {
+        CString::new(self.as_encoded_bytes())
+    }
+}
+
+impl TryIntoCStr for std::path::PathBuf {
+    type Borrow = CString;
+
+    #[inline]
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError> {
+        self.into_os_string().try_into_cstr()
+    }
+}
+
+impl TryIntoCStr for &std::path::Path {
+    type Borrow = CString;
+
+    #[inline]
+    fn try_into_cstr(self) -> Result<Self::Borrow, std::ffi::NulError> {
+        self.as_os_str().try_into_cstr()
+    }
+}
 
 fn no_drop<T>(_thing: T) {}
 // SOUNDNESS: readonly — P1 (chars slice trusts glyphs×glyphCount) + P2 (Drop=UnloadFont frees recs/glyphs).
